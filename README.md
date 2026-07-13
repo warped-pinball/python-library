@@ -16,6 +16,11 @@ A Python client for **Warped Pinball "Vector"** boards — the WiFi board
 This library wraps all of that behind one `Machine` object, plus a `vector`
 command-line tool.
 
+Detailed guides live in [`docs/`](docs/README.md) — including
+[reading & writing memory](docs/memory.md), [address maps](docs/address-maps.md),
+and the [HTTP API reference](docs/http-api.md) for the raw
+`/api/address/read` / `/api/address/write` routes.
+
 ## Install
 
 Requires Python 3.9+.
