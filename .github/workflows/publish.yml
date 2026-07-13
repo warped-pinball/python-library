@@ -6,7 +6,28 @@ on:
   workflow_dispatch:
 
 jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ensure release tag matches the package version
+        # On a release/tag build GITHUB_REF is refs/tags/<tag>, so
+        # check_version.py compares the tag against pyproject.toml and the
+        # package __version__. --require-tag makes a release run fail loudly
+        # if it was somehow triggered without a tag. workflow_dispatch runs
+        # (no tag) still verify pyproject.toml vs. the package agree.
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            python scripts/check_version.py --require-tag
+          else
+            python scripts/check_version.py
+          fi
+
   build:
+    needs: version-check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

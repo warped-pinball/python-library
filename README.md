@@ -291,3 +291,28 @@ pip install -e ".[dev,usb]"
 pytest          # run the tests
 ruff check .    # lint
 ```
+
+## Releasing
+
+The package version lives in two places that must always agree:
+
+- `pyproject.toml` → `[project] version`
+- `warpedpinball/__init__.py` → `__version__`
+
+`scripts/check_version.py` enforces this and, when run against a git tag,
+verifies the tag matches too. CI runs it on every pull request, so drift
+between the two files fails fast. The publish workflow runs it again on the
+release tag before anything is built, so a release whose tag doesn't match the
+package version (e.g. tagging `v0.2.0` while `pyproject.toml` still says
+`0.1.0`) fails before it can reach PyPI.
+
+To cut a release:
+
+1. Bump the version in **both** `pyproject.toml` and `warpedpinball/__init__.py`.
+2. Verify locally: `python scripts/check_version.py --tag vX.Y.Z`
+3. Merge, then create a GitHub release with the tag `vX.Y.Z` (the leading `v`
+   is optional — both `vX.Y.Z` and `X.Y.Z` are accepted).
+
+The `Publish` workflow validates the tag, builds the distributions, and
+publishes to PyPI via Trusted Publishing.
+
