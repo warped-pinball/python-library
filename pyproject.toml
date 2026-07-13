@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "warped-pinball-vector"
+name = "warpedpinball"
 version = "0.1.0"
 description = "Python client for Warped Pinball Vector boards (HTTP, USB serial, and UDP discovery)"
 readme = "README.md"

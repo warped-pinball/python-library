@@ -1,6 +1,6 @@
 # Documentation
 
-Guides for the `warped-pinball-vector` Python library and the HTTP routes it
+Guides for the `warpedpinball` Python library and the HTTP routes it
 wraps. Start with the top-level [README](../README.md) for installation,
 discovery, and connection basics.
 

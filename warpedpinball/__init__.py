@@ -1,4 +1,4 @@
-"""warped-pinball-vector: Python client for Warped Pinball Vector boards.
+"""warpedpinball: Python client for Warped Pinball Vector boards.
 
 Quickstart::
 
