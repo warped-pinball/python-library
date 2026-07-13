@@ -56,10 +56,6 @@ players, reset leaderboards, write memory, and more.
 - **Read and write game memory.** Peek at credits, scores, and settings in the
   machine's battery-backed SRAM, or change them. See
   [reading and writing memory](https://github.com/warped-pinball/python-library/blob/main/docs/memory.md).
-- **Ship mods with named addresses.** Define `"player1_score"` once in an
-  `AddressMap`, share it as JSON, and other people's code gets the same names
-  for the same ROM. See
-  [address maps](https://github.com/warped-pinball/python-library/blob/main/docs/address-maps.md).
 - **Reach any firmware route.** `m.call()` gives you the whole HTTP API, even
   routes that don't have a wrapper yet. See the
   [HTTP API reference](https://github.com/warped-pinball/python-library/blob/main/docs/http-api.md).
@@ -79,8 +75,6 @@ Full guides live in the
   handling
 - [Reading and writing memory](https://github.com/warped-pinball/python-library/blob/main/docs/memory.md):
   memory reads/writes, snapshots, and finding addresses
-- [Address maps](https://github.com/warped-pinball/python-library/blob/main/docs/address-maps.md):
-  naming memory locations and sharing maps for a game ROM
 - [HTTP API reference](https://github.com/warped-pinball/python-library/blob/main/docs/http-api.md):
   the raw firmware routes
 - [CLI guide](https://github.com/warped-pinball/python-library/blob/main/docs/cli.md):
