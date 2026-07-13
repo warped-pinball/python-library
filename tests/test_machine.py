@@ -227,12 +227,12 @@ def test_apply_update_without_url_and_no_update_raises():
 
 # -- clock --------------------------------------------------------------------------
 
-def test_set_date_sends_rtc_tuple():
+def test_set_date_sends_date_list():
     machine, transport = make_machine()
     when = datetime.datetime(2026, 7, 13, 17, 30, 45)
     machine.set_date(when)
     body = transport.calls[0][1]
-    assert body == {"date": [2026, 7, 13, when.weekday(), 17, 30, 45, 0]}
+    assert body == {"date": [2026, 7, 13, 17, 30, 45]}
 
 
 def test_date_parses_rtc_tuple_and_iso():

@@ -8,7 +8,7 @@ made where the spec was ambiguous.
 - [x] `pyproject.toml` (distribution `warped-pinball-vector`, package `warpedpinball`, Python 3.9+, `requests` dep, `pyserial` behind `[usb]` extra, `vector` console entry point)
 - [x] `README.md` (install, quickstart, discovery, auth, USB, address maps, CLI)
 - [x] `.gitignore`
-- [ ] License file — **needs product-owner decision** (none committed yet)
+- [x] License file — MIT (`LICENSE`, `pyproject.toml` `license = "MIT"`)
 
 ## 2. Core library (`warpedpinball/`)
 - [x] `exceptions.py` — typed error hierarchy
@@ -80,9 +80,8 @@ made where the spec was ambiguous.
 - [x] Package build check (`python -m build`) in CI
 
 ## 5. Deferred / needs input
-- [ ] License choice (left unset in pyproject pending decision)
-- [ ] Exact JSON body shapes for `/api/set_date`, `/api/adjustments/*`, `/api/memory-snapshot` auth — implemented per best reading of spec; verify against firmware (`src/common/backend.py`) which is **not present in this repo** (see notes/DECISIONS.md)
-- [ ] Async `AsyncMachine` variant (stretch goal, not in v1)
-- [ ] AP-mode setup routes (`/api/settings/set_vector_config`, `/api/available_ssids`) — skipped in v1 per spec
+- [x] Exact JSON body shapes for `/api/set_date`, `/api/adjustments/*`, `/api/memory-snapshot` auth — verified against real `src/common/backend.py`; `set_date()` had the wrong body shape (8-tuple with weekday/subseconds instead of the firmware's 6-element `[year, month, day, hour, minute, second]`) and has been fixed; adjustments routes and memory-snapshot's unauthenticated status were already correct (see notes/DECISIONS.md)
+- [x] ~~Async `AsyncMachine` variant~~ — permanently out of scope per product owner
+- [x] ~~AP-mode setup routes (`/api/settings/set_vector_config`, `/api/available_ssids`)~~ — permanently out of scope per product owner
 - [ ] Live smoke test against https://vector.doze.dev (read-only routes) — not run from this environment
-- [ ] PyPI trusted-publisher configuration for the release workflow (one-time setup on pypi.org)
+- [ ] PyPI trusted-publisher configuration for the release workflow — pending trusted publisher already set up on PyPI; remaining steps below

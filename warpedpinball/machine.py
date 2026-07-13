@@ -266,7 +266,7 @@ class Machine:
         if url is None:
             info = self.check_for_updates()
             if isinstance(info, dict):
-                url = info.get("url") or info.get("update_url")
+                url = info.get("url")
             if not url:
                 raise VectorError(
                     "check_for_updates() did not report an update URL; "
@@ -296,22 +296,20 @@ class Machine:
     def set_date(self, when: Optional[_dt.datetime] = None) -> Any:
         """Set the device RTC (defaults to the local clock now).
 
-        Converts to the MicroPython RTC 8-tuple
-        ``(year, month, day, weekday, hour, minute, second, subseconds)``.
+        Sends ``[year, month, day, hour, minute, second]``; the firmware
+        derives the weekday itself via ``RTC.datetime()``.
         """
         when = when or _dt.datetime.now()
-        rtc_tuple = [
+        date_list = [
             when.year,
             when.month,
             when.day,
-            when.weekday(),
             when.hour,
             when.minute,
             when.second,
-            0,
         ]
         return self._call_gated(
-            "/api/set_date", body={"date": rtc_tuple}, authenticated=True
+            "/api/set_date", body={"date": date_list}, authenticated=True
         )
 
     # -- logs ------------------------------------------------------------------------
