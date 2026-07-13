@@ -13,21 +13,36 @@ corrected against the real firmware later.
    confirms phew routes ignore the method and POST-with-JSON works everywhere.
 3. **JSON serialization**: `json.dumps(body, separators=(",", ":"))` — compact,
    serialized exactly once; the same string is signed and sent.
-4. **`/api/set_date` body**: sends `{"date": [year, month, day, weekday, hour,
-   minute, second, 0]}` (MicroPython RTC 8-tuple). `date()` accepts either that
-   tuple shape or an ISO string in the response. **Verify against firmware.**
-5. **Adjustments routes**: assumed `/api/adjustments/status` (GET, no auth),
-   `/api/adjustments/capture` `{"index"}` (auth), `/api/adjustments/restore`
-   `{"index"}` (auth, 5 s cooldown), `/api/adjustments/name`
-   `{"index", "name"}` (auth). **Verify against `docs/routes.md`.**
-6. **`check_for_updates()` URL key**: `apply_update()` with no `url` looks for
-   `"url"` in the check response, falling back to `"update_url"`. **Verify.**
+4. **`/api/set_date` body**: **Confirmed against `src/common/backend.py`.**
+   Firmware does `date = [int(e) for e in request.json["date"]]` then
+   `rtc.datetime((date[0], date[1], date[2], 0, date[3], date[4], date[5], 0))`
+   — the wire body is `{"date": [year, month, day, hour, minute, second]}`, a
+   **6-element** list with no weekday/subseconds; the firmware derives the
+   weekday itself. The originally-implemented 8-element
+   `[year, month, day, weekday, hour, minute, second, 0]` shape was wrong and
+   would have been rejected/misread by the real device; fixed in
+   `Machine.set_date()`. `/api/get_date` (`{"date": list(rtc.datetime())}`) is
+   still the 8-tuple `(year, month, day, weekday, hour, minute, second, sub)`,
+   which `date()` already parses correctly.
+5. **Adjustments routes**: **Confirmed against `src/common/backend.py`.**
+   `/api/adjustments/status` (GET, no auth) returns
+   `{"profiles": [[name, active, exists], ...], "adjustments_support": bool}`;
+   `/api/adjustments/capture` `{"index"}` (auth); `/api/adjustments/restore`
+   `{"index"}` (auth, 5 s cooldown); `/api/adjustments/name`
+   `{"index", "name"}` (auth). Matches the original implementation as-is.
+6. **`check_for_updates()` URL key**: **Confirmed** — the firmware's
+   `/api/update/check` proxies GitHub release JSON and only ever provides a
+   `"url"` key; there is no `"update_url"` variant. Removed the speculative
+   fallback from `apply_update()`.
 7. **BCD encoding**: packed BCD, most-significant byte first (standard
-   Williams/Bally score storage). Two decimal digits per byte.
-8. **`watch_game()` key detection**: the exact `/api/game/status` shape is not
-   in the spec, so change detection is heuristic — it looks for keys matching
-   game-active / ball-in-play / scores case-insensitively and falls back to a
-   generic `status_changed` event. Tighten once the real shape is known.
+   Williams/Bally score storage). Two decimal digits per byte. Not covered by
+   the firmware route file (score encoding lives in `ScoreTrack`/`DataMapper`,
+   not present here) — still unverified.
+8. **`watch_game()` key detection**: `/api/game/status` (`src/common/backend.py`
+   → `GameStatus.cached_report()`) is confirmed to return keys like
+   `GameActive` (bool), `BallInPlay` (int), `Scores` (list[int]) — the existing
+   fragment-matching heuristic (`gameactive`/`active`, `ball`, `score`) already
+   covers this shape, so no code change was needed here.
 9. **Wrapper return values**: wrappers return the parsed JSON from the device
    as-is (dicts/lists). `warpedpinball.models` offers lenient typed dataclasses
    (`Score`, `Player`, `GameStatus`, `UpdateInfo`) users can wrap raw payloads
@@ -35,10 +50,15 @@ corrected against the real firmware later.
    could not be verified from this repo.
 10. **License**: MIT, committed as `LICENSE` and declared via `license = "MIT"`
     in `pyproject.toml`.
-11. **`/api/memory-snapshot` auth**: the spec marks `/api/address/read`/`write`
-    as authenticated but never states the snapshot route's auth requirement;
-    `memory_snapshot()` currently calls it unauthenticated. **Verify against
-    `docs/routes.md`** and flip to `authenticated=True` if needed.
+11. **`/api/memory-snapshot` auth**: **Confirmed against `src/common/backend.py`**
+    — `@add_route("/api/memory-snapshot")` has no `auth=True`, so the route is
+    genuinely unauthenticated. `memory_snapshot()` calling it unauthenticated
+    was already correct; no change needed.
 12. **PyPI publishing**: workflow uses PyPI *trusted publishing* (OIDC) on
     GitHub release; the PyPI project must be configured with this repo as a
     trusted publisher before the first release.
+13. **Async `AsyncMachine` variant**: permanently out of scope per product
+    owner — will not be built.
+14. **AP-mode setup routes** (`/api/settings/set_vector_config`,
+    `/api/available_ssids`): permanently out of scope per product owner —
+    intentionally left unimplemented (v1 targets app-mode/station use only).
