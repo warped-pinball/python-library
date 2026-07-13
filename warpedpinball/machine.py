@@ -15,7 +15,6 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
 
-from .addresses import AddressMap
 from .exceptions import (
     AuthenticationRequiredError,
     TransportError,
@@ -57,12 +56,10 @@ class Machine:
         self,
         transport: Transport,
         password: Optional[str] = None,
-        addresses: Optional[AddressMap] = None,
         name: Optional[str] = None,
     ):
         self.transport = transport
         self._password = password
-        self.addresses = addresses if addresses is not None else AddressMap()
         self.name = name
         self._lock = threading.RLock()
         self._firmware_version: Optional[str] = None
@@ -372,24 +369,6 @@ class Machine:
                 authenticated=True,
             )
             pos += len(chunk)
-
-    def read(self, target: Union[str, int], count: Optional[int] = None) -> Any:
-        """Read a named address (decoded per its encoding) or a raw offset.
-
-        For raw offsets, ``count`` (default 1) selects the byte count; a single
-        byte comes back as an ``int``, longer reads as ``bytes``.
-        """
-        entry = self.addresses.resolve(target)
-        length = count if (count is not None and isinstance(target, int)) else entry.length
-        data = self.read_bytes(entry.offset, length)
-        if count is not None and isinstance(target, int):
-            return data[0] if length == 1 else data
-        return entry.decode(data)
-
-    def write(self, target: Union[str, int], value: Any) -> None:
-        """Write a named address (encoded per its encoding) or a raw offset."""
-        entry = self.addresses.resolve(target)
-        self.write_bytes(entry.offset, entry.encode(value))
 
     def memory_snapshot(self) -> bytes:
         """Full SRAM dump via the streamed ``/api/memory-snapshot`` route."""

@@ -14,7 +14,6 @@ from __future__ import annotations
 import ipaddress
 from typing import List, Optional
 
-from .addresses import AddressMap
 from .discovery import DiscoveredMachine, discover
 from .exceptions import (
     AmbiguousMachineError,
@@ -40,7 +39,6 @@ __all__ = [
     "list_serial_ports",
     "Machine",
     "GameEvent",
-    "AddressMap",
     "DiscoveredMachine",
     "HttpTransport",
     "VectorError",
@@ -94,7 +92,6 @@ def connect(
     name_or_ip: str,
     password: Optional[str] = None,
     timeout: float = 5.0,
-    addresses: Optional[AddressMap] = None,
     http_timeout: float = 10.0,
 ) -> Machine:
     """Connect to a machine by LAN name (via UDP discovery) or by IP address.
@@ -113,17 +110,11 @@ def connect(
         machine_name = match.name
 
     transport = HttpTransport(host, password=password, timeout=http_timeout)
-    machine = Machine(
-        transport, password=password, addresses=addresses, name=machine_name
-    )
-    if addresses is None:
-        _try_autoload_addresses(machine)
-    return machine
+    return Machine(transport, password=password, name=machine_name)
 
 
 def connect_usb(
     port: Optional[str] = None,
-    addresses: Optional[AddressMap] = None,
     timeout: float = 10.0,
 ) -> Machine:
     """Connect to a USB-attached machine.
@@ -144,10 +135,7 @@ def connect_usb(
         else:
             raise AmbiguousMachineError("usb", candidates)
 
-    machine = Machine(UsbTransport(port, timeout=timeout), addresses=addresses)
-    if addresses is None:
-        _try_autoload_addresses(machine)
-    return machine
+    return Machine(UsbTransport(port, timeout=timeout))
 
 
 def list_serial_ports(all_ports: bool = False) -> List[str]:
@@ -155,24 +143,3 @@ def list_serial_ports(all_ports: bool = False) -> List[str]:
     from .transports.usb import list_serial_ports as _lsp
 
     return _lsp(all_ports=all_ports)
-
-
-def _try_autoload_addresses(machine: Machine) -> None:
-    """Best-effort load of a community address map from
-    ``~/.warpedpinball/addressmaps/<active_config>.json``."""
-    import os
-
-    from .addresses import REGISTRY_DIR
-
-    if not os.path.isdir(os.path.expanduser(REGISTRY_DIR)):
-        return  # no registry on this system; skip the extra device round-trip
-    try:
-        config = machine.active_config()
-        if isinstance(config, dict):
-            config = config.get("active_config") or config.get("name")
-        if isinstance(config, str) and config:
-            loaded = AddressMap.load_registry(config)
-            if loaded is not None:
-                machine.addresses = loaded
-    except Exception:  # noqa: BLE001 - autoload is opportunistic only
-        pass

@@ -12,11 +12,10 @@ All offsets are **relative to the start of the SRAM data region**
 (`SRAM_DATA_BASE`), matching the offsets found in game memory maps.
 
 You will rarely call these routes directly, because the `Machine` object provides
-wrappers at three levels of convenience:
+wrappers at two levels of convenience:
 
 1. [`read_bytes()` / `write_bytes()`](#bulk-bytes-read_bytes--write_bytes): bulk raw bytes, auto-chunked
-2. [`read()` / `write()`](#named-or-single-address-read--write): one value at a named address or raw offset, with decoding
-3. [`memory_snapshot()` / `diff_snapshots()`](#whole-memory-snapshots): the whole SRAM at once
+2. [`memory_snapshot()` / `diff_snapshots()`](#whole-memory-snapshots): the whole SRAM at once
 
 ## Setup
 
@@ -54,39 +53,10 @@ m.write_bytes(0x0200, data)
 m.write_bytes(0x2134, [0x05, 0x00, 0x12])
 ```
 
-## Named or single address: `read()` / `write()`
-
-`read(target)` and `write(target, value)` accept either a **name** defined in
-the machine's [`AddressMap`](address-maps.md) or a **raw integer offset**.
-
-### Raw offsets
-
-```python
-credits = m.read(0x2134)          # one byte -> int (e.g. 5)
-raw = m.read(0x0200, count=4)     # multiple bytes -> bytes (e.g. b'\x12\x34\x56\x00')
-
-m.write(0x2134, 5)                # write a single byte
-```
-
-With a raw offset, `count` defaults to 1; a one-byte read comes back as an
-`int`, longer reads as `bytes`.
-
-### Named addresses
-
-Define names once (or [load a shared map](address-maps.md#sharing-maps-as-json))
-and the values are decoded/encoded for you:
-
-```python
-m.addresses.define("credits", 0x2134)                            # raw byte
-m.addresses.define("player1_score", 0x0200, length=4, encoding="bcd")
-
-score = m.read("player1_score")   # -> 1234500 (decoded from packed BCD)
-m.write("credits", 5)
-m.write("player1_score", 50000)   # encoded back to BCD before writing
-```
-
-See [Address maps](address-maps.md) for the available encodings and how to
-share maps between users.
+Reads return raw bytes; if a region holds an encoded value (packed BCD, a
+little- or big-endian integer, ...) decode it in your own code. The library
+deliberately doesn't try to name or decode addresses for you — those layouts
+are game-specific and best kept alongside the code that knows about them.
 
 ## Whole-memory snapshots
 
@@ -148,9 +118,9 @@ Each command takes a machine name or IP, plus `--password/-p` (or
 
 The board is a single-threaded microcontroller. The library serializes all
 requests per `Machine` (one lock per machine), and chunked reads/writes send
-one request at a time, but a tight polling loop over `read()` is still a
-polling loop. Prefer reading a whole region with one `read_bytes()` call over
-many single-byte `read()`s, and keep poll intervals at 0.5 s or more.
+one request at a time, but a tight polling loop is still a polling loop. Prefer
+reading a whole region with one `read_bytes()` call over many single-byte
+reads, and keep poll intervals at 0.5 s or more.
 
 ## Errors you may see
 

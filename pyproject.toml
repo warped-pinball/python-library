@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "warpedpinball"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Python client for Warped Pinball Vector boards (HTTP, USB serial, and UDP discovery)"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -36,6 +36,10 @@ Issues = "https://github.com/warped-pinball/python-library/issues"
 
 [project.scripts]
 vector = "warpedpinball.cli:main"
+
+[tool.hatch.version]
+# Single source of truth for the version: warpedpinball/__init__.py __version__.
+path = "warpedpinball/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["warpedpinball"]

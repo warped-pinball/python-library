@@ -7,8 +7,7 @@ a quickstart.
 | Document | Covers |
 | --- | --- |
 | [Working with a machine](machine.md) | Connecting (WiFi, IP, USB), authentication, the wrapper methods, `Machine.call()`, live game events, cooldowns, and the error hierarchy |
-| [Reading & writing memory](memory.md) | The `/api/address/read` and `/api/address/write` routes, the `read_bytes()` / `write_bytes()` / `read()` / `write()` wrappers, chunking, snapshots, and the CLI equivalents |
-| [Address maps](address-maps.md) | Naming memory locations with `AddressMap`, encodings (BCD, little/big-endian), sharing maps as JSON, and the registry convention |
+| [Reading & writing memory](memory.md) | The `/api/address/read` and `/api/address/write` routes, the `read_bytes()` / `write_bytes()` wrappers, chunking, snapshots, and the CLI equivalents |
 | [HTTP API reference](http-api.md) | Request/response shapes for the address routes and how to reach any firmware route with `Machine.call()` |
 | [CLI guide](cli.md) | The `vector` command and its subcommands |
 
@@ -23,8 +22,8 @@ in game ROM manuals and memory maps, not absolute CPU addresses.
 import warpedpinball
 
 with warpedpinball.connect("elvira", password="hunter2") as m:
-    credits = m.read(0x2134)          # one byte -> int
-    m.write(0x2134, 5)                # set it
+    credits = m.read_bytes(0x2134, 1)   # one byte
+    m.write_bytes(0x2134, [5])          # set it
 ```
 
 Reads and writes of SRAM are **authenticated** routes: you need the machine's
