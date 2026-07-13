@@ -84,8 +84,8 @@ per request automatically.
 
 > **Careful:** writes go straight into the game's live memory. Writing the
 > wrong offset can corrupt scores, settings, or crash the game in progress.
-> Verify offsets against a known-good [address map](address-maps.md) for the
-> exact ROM the machine is running.
+> Verify offsets against a known-good memory map for the exact ROM the machine
+> is running.
 
 ## `/api/memory-snapshot`
 

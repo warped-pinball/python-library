@@ -158,33 +158,13 @@ def test_write_bytes_chunks_at_256():
     assert [b["offset"] for b in bodies] == [0x20, 0x20 + 256]
 
 
-def test_named_read_write_with_encoding():
-    memory = bytearray(0x3000)
-    memory[0x2140:0x2143] = bytes([0x12, 0x34, 0x56])
-    machine, transport = make_machine(
-        responses={"/api/address/read": address_read_responder(bytes(memory))}
-    )
-    machine.addresses.define("bonus", 0x2140, length=3, encoding="bcd")
-    machine.addresses.define("mode_a_clock", 0x2134)
-
-    assert machine.read("bonus") == 123456
-    assert machine.read("mode_a_clock") == 0
-
-    machine.write("bonus", 654321)
-    write_body = transport.calls[-1][1]
-    assert write_body == {"offset": 0x2140, "values": [0x65, 0x43, 0x21]}
-
-    machine.write("mode_a_clock", 0x05)
-    assert transport.calls[-1][1] == {"offset": 0x2134, "values": [5]}
-
-
-def test_raw_offset_read():
+def test_read_bytes_single_and_range():
     memory = bytes([7] * 100)
     machine, _ = make_machine(
         responses={"/api/address/read": address_read_responder(memory)}
     )
-    assert machine.read(0x10) == 7
-    assert machine.read(0x10, count=4) == b"\x07\x07\x07\x07"
+    assert machine.read_bytes(0x10, 1) == b"\x07"
+    assert machine.read_bytes(0x10, 4) == b"\x07\x07\x07\x07"
 
 
 def test_memory_snapshot_joins_stream():

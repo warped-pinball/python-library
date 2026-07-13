@@ -6,7 +6,7 @@ made where the spec was ambiguous.
 
 ## 1. Project scaffolding
 - [x] `pyproject.toml` (distribution `warped-pinball-vector`, package `warpedpinball`, Python 3.9+, `requests` dep, `pyserial` behind `[usb]` extra, `vector` console entry point)
-- [x] `README.md` (install, quickstart, discovery, auth, USB, address maps, CLI)
+- [x] `README.md` (install, quickstart, discovery, auth, USB, memory, CLI)
 - [x] `.gitignore`
 - [x] License file - MIT (`LICENSE`, `pyproject.toml` `license = "MIT"`)
 
@@ -45,17 +45,12 @@ made where the spec was ambiguous.
   - [x] FULL frame parser (tolerates PING/PONG/OFFLINE noise, truncated/garbage frames)
   - [x] bind 37020 with fallback to ephemeral port
   - [x] `DiscoveredMachine(ip, name)` dataclass, dedup by IP, early exit on name match
-- [x] `addresses.py` - `AddressMap`
-  - [x] `define(name, offset, length=1, encoding=None)`
-  - [x] encodings: `"bcd"`, `"le_uint"`, `"be_uint"`, custom `(decode, encode)` pair
-  - [x] `save(path)` / `AddressMap.load(path)` incl. `active_config`, mismatch warning
-  - [x] registry convention: `~/.warpedpinball/addressmaps/<active_config>.json` auto-load
 - [x] `machine.py` - `Machine`
   - [x] per-machine lock; all traffic serialized
   - [x] context manager
   - [x] password: ctor / attribute / `VECTOR_PASSWORD` env fallback; pre-flight `AuthenticationRequiredError`
   - [x] raw escape hatch: `call()`, `call_stream()`
-  - [x] memory: `read`, `write`, `read_bytes`, `write_bytes` (auto-chunked at 256), `memory_snapshot()`, `diff_snapshots()`
+  - [x] memory: `read_bytes`, `write_bytes` (auto-chunked at 256), `memory_snapshot()`, `diff_snapshots()`
   - [x] wrappers: version, machine_id, game_name, game_status, reboot_game, reboot, leaderboard, tournament, reset_leaderboard, reset_tournament, claimable_scores, claim_score, players, update_player, check_for_updates, apply_update(progress=), date, set_date, wifi_status, faults, logs, export_scores, import_scores, adjustments, capture_adjustments, restore_adjustments, name_adjustment, peers, verify_password
   - [x] `watch_game(interval=1.0)` polling generator (game start/end, ball change, score deltas)
   - [x] `wait_until_reachable(timeout)`
@@ -71,7 +66,7 @@ made where the spec was ambiguous.
 - [x] Discovery FULL-frame decoding (hand-built bytes, truncated/garbage, PING/PONG noise)
 - [x] USB framing (`\|` escaping, interleaved log lines, JSON-in-string body)
 - [x] HTTP transport auth flow (challenge retry, error mapping) with mocked session
-- [x] AddressMap encodings, save/load, chunked read/write
+- [x] Chunked read_bytes/write_bytes (256-byte splitting)
 - [x] CLI smoke tests
 
 ## 4. Infrastructure

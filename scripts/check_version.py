@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
-"""Verify that version strings stay in sync across the project.
+"""Verify that a release tag matches the package version.
 
-There are (up to) three sources of version truth for this package:
+The single source of truth for the version is ``warpedpinball/__init__.py``
+(``__version__``); ``pyproject.toml`` reads it dynamically via Hatch. This
+script compares that version against a release tag so we never publish
+``warpedpinball==0.1.0`` under a ``v0.2.0`` tag.
 
-1. ``pyproject.toml``            -> ``[project] version``
-2. ``warpedpinball/__init__.py`` -> ``__version__``
-3. A git release tag            -> e.g. ``v0.1.0`` or ``0.1.0``
+The tag is taken from ``--tag`` or, when running in GitHub Actions, from the
+``GITHUB_REF``/``GITHUB_REF_NAME`` environment variables. A leading ``v`` and
+a ``refs/tags/`` prefix are both accepted.
 
-Sources 1 and 2 must always agree, otherwise the installed package reports
-a different version than the built distribution. When a release tag is
-supplied (via ``--tag`` or the ``GITHUB_REF``/``GITHUB_REF_NAME`` environment
-variables produced by GitHub Actions), it must also agree with the package
-version so we never publish ``warpedpinball==0.1.0`` under a ``v0.2.0`` tag.
-
-Exit status is 0 when everything matches and 1 otherwise, which makes this
-usable as a CI gate.
+Exit status is 0 when the versions match (or no tag is supplied and
+``--require-tag`` was not passed) and 1 otherwise, so this works as a CI gate.
 """
 
 from __future__ import annotations
@@ -26,56 +23,11 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PYPROJECT = REPO_ROOT / "pyproject.toml"
 INIT_PY = REPO_ROOT / "warpedpinball" / "__init__.py"
 
 _INIT_VERSION_RE = re.compile(
     r"""^__version__\s*=\s*["']([^"']+)["']""", re.MULTILINE
 )
-
-
-def _load_toml(path: Path) -> dict:
-    """Parse a TOML file using whatever parser is available.
-
-    ``tomllib`` ships with Python 3.11+. On 3.9/3.10 we fall back to the
-    third-party ``tomli`` if installed, and finally to a tiny regex that only
-    understands the ``[project] version = "..."`` line we care about.
-    """
-    try:
-        import tomllib  # type: ignore[import-not-found]
-
-        return tomllib.loads(path.read_text(encoding="utf-8"))
-    except ModuleNotFoundError:
-        pass
-
-    try:
-        import tomli  # type: ignore[import-not-found]
-
-        return tomli.loads(path.read_text(encoding="utf-8"))
-    except ModuleNotFoundError:
-        pass
-
-    # Minimal fallback: find the version under the [project] table.
-    text = path.read_text(encoding="utf-8")
-    in_project = False
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            in_project = stripped == "[project]"
-            continue
-        if in_project:
-            m = re.match(r"""version\s*=\s*["']([^"']+)["']""", stripped)
-            if m:
-                return {"project": {"version": m.group(1)}}
-    return {}
-
-
-def get_pyproject_version() -> str:
-    data = _load_toml(PYPROJECT)
-    try:
-        return str(data["project"]["version"])
-    except (KeyError, TypeError):
-        raise SystemExit(f"Could not find [project].version in {PYPROJECT}") from None
 
 
 def get_package_version() -> str:
@@ -129,44 +81,31 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    pyproject_version = get_pyproject_version()
     package_version = get_package_version()
-
-    errors: list[str] = []
-
-    if pyproject_version != package_version:
-        errors.append(
-            "Version mismatch between pyproject.toml and the package:\n"
-            f"    pyproject.toml [project].version = {pyproject_version!r}\n"
-            f"    warpedpinball.__version__         = {package_version!r}"
-        )
-
     tag = resolve_tag(args.tag)
+
     if tag is None:
         if args.require_tag:
-            errors.append(
-                "No release tag supplied. Pass --tag or run inside a tag "
-                "build (GITHUB_REF=refs/tags/...)."
+            print(
+                "Version check FAILED: no release tag supplied. Pass --tag or "
+                "run inside a tag build (GITHUB_REF=refs/tags/...).",
+                file=sys.stderr,
             )
-    elif tag != pyproject_version:
-        errors.append(
-            "Release tag does not match the package version:\n"
-            f"    tag (normalized) = {tag!r}\n"
-            f"    package version  = {pyproject_version!r}\n"
-            "Update pyproject.toml and warpedpinball/__init__.py, or retag the "
-            "release so they agree."
-        )
+            return 1
+        print(f"Version check OK: package version is {package_version} (no tag given)")
+        return 0
 
-    if errors:
-        print("Version check FAILED:\n", file=sys.stderr)
-        for err in errors:
-            print(f"  - {err}\n", file=sys.stderr)
+    if tag != package_version:
+        print(
+            "Version check FAILED: release tag does not match the package version:\n"
+            f"    tag (normalized)         = {tag!r}\n"
+            f"    warpedpinball.__version__ = {package_version!r}\n"
+            "Update warpedpinball/__init__.py or retag the release so they agree.",
+            file=sys.stderr,
+        )
         return 1
 
-    summary = f"Version check OK: {pyproject_version}"
-    if tag is not None:
-        summary += f" (matches tag {tag})"
-    print(summary)
+    print(f"Version check OK: {package_version} (matches tag {tag})")
     return 0
 
 

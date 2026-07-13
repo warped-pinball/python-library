@@ -1,9 +1,10 @@
-"""Guard that version strings stay consistent across the project.
+"""Guard that release tags match the package version.
 
-These tests fail on a pull request the moment ``pyproject.toml`` and
-``warpedpinball.__version__`` drift apart, long before a release is cut. The
-release-time tag check lives in ``scripts/check_version.py`` and is exercised
-here too so its normalization logic is covered.
+The single source of truth for the version is ``warpedpinball.__version__``
+(``pyproject.toml`` reads it dynamically via Hatch). The release-time tag check
+lives in ``scripts/check_version.py``; these tests exercise it, including its
+tag-normalization logic, so a mismatched release tag fails in CI before it can
+reach PyPI.
 """
 
 from __future__ import annotations
@@ -28,8 +29,8 @@ def _load_check_module():
 check_version = _load_check_module()
 
 
-def test_pyproject_matches_package_version():
-    assert check_version.get_pyproject_version() == warpedpinball.__version__
+def test_script_reads_package_version():
+    assert check_version.get_package_version() == warpedpinball.__version__
 
 
 def test_check_passes_without_tag():
