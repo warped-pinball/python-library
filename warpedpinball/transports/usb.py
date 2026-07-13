@@ -44,7 +44,7 @@ def _require_pyserial():
     except ImportError as exc:  # pragma: no cover - import guard
         raise ImportError(
             "pyserial is required for USB support; "
-            "install with: pip install warped-pinball-vector[usb]"
+            "install with: pip install warpedpinball[usb]"
         ) from exc
     return serial
 

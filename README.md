@@ -1,7 +1,7 @@
-# warped-pinball-vector
+# warpedpinball
 
 [![CI](https://github.com/warped-pinball/python-library/actions/workflows/ci.yml/badge.svg)](https://github.com/warped-pinball/python-library/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/warped-pinball-vector.svg)](https://pypi.org/project/warped-pinball-vector/)
+[![PyPI](https://img.shields.io/pypi/v/warpedpinball.svg)](https://pypi.org/project/warpedpinball/)
 
 A Python client for **Warped Pinball "Vector"** boards — the WiFi board
 (Raspberry Pi Pico 2W) that lives inside a pinball machine and exposes:
@@ -26,13 +26,13 @@ and the [HTTP API reference](docs/http-api.md) for the raw
 Requires Python 3.9+.
 
 ```bash
-pip install warped-pinball-vector
+pip install warpedpinball
 ```
 
 For USB serial support (adds [pyserial](https://pypi.org/project/pyserial/)):
 
 ```bash
-pip install "warped-pinball-vector[usb]"
+pip install "warpedpinball[usb]"
 ```
 
 ## Quickstart
