@@ -11,12 +11,12 @@ HTTP routes:
 All offsets are **relative to the start of the SRAM data region**
 (`SRAM_DATA_BASE`), matching the offsets found in game memory maps.
 
-You will rarely call these routes directly — the `Machine` object provides
+You will rarely call these routes directly, because the `Machine` object provides
 wrappers at three levels of convenience:
 
-1. [`read_bytes()` / `write_bytes()`](#bulk-bytes-read_bytes--write_bytes) — bulk raw bytes, auto-chunked
-2. [`read()` / `write()`](#named-or-single-address-read--write) — one value at a named address or raw offset, with decoding
-3. [`memory_snapshot()` / `diff_snapshots()`](#whole-memory-snapshots) — the whole SRAM at once
+1. [`read_bytes()` / `write_bytes()`](#bulk-bytes-read_bytes--write_bytes): bulk raw bytes, auto-chunked
+2. [`read()` / `write()`](#named-or-single-address-read--write): one value at a named address or raw offset, with decoding
+3. [`memory_snapshot()` / `diff_snapshots()`](#whole-memory-snapshots): the whole SRAM at once
 
 ## Setup
 
@@ -42,7 +42,7 @@ work into 256-byte requests (the firmware's per-request cap), so you can ask
 for any size:
 
 ```python
-# Read 600 bytes starting at 0x0200 — sent as three requests
+# Read 600 bytes starting at 0x0200, sent as three requests
 # (256 + 256 + 88) behind the scenes:
 data = m.read_bytes(0x0200, 600)
 print(data.hex(" "))
@@ -127,7 +127,7 @@ m.call(
 )
 ```
 
-Note that `call()` does **not** chunk for you — keep `count` and
+Note that `call()` does **not** chunk for you: keep `count` and
 `len(values)` at 256 or below per request.
 
 ## From the command line
@@ -148,7 +148,7 @@ Each command takes a machine name or IP, plus `--password/-p` (or
 
 The board is a single-threaded microcontroller. The library serializes all
 requests per `Machine` (one lock per machine), and chunked reads/writes send
-one request at a time — but a tight polling loop over `read()` is still a
+one request at a time, but a tight polling loop over `read()` is still a
 polling loop. Prefer reading a whole region with one `read_bytes()` call over
 many single-byte `read()`s, and keep poll intervals at 0.5 s or more.
 
