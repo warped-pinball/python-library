@@ -56,6 +56,17 @@ m.password = "hunter2"
 Over **USB no password is needed at all**: the firmware trusts physical
 access and skips HMAC for requests arriving on the serial port.
 
+> **Power the machine down before connecting or disconnecting USB.** When you
+> plug a USB cable into the Vector board, the board is powered *through the USB
+> port* instead of by the pinball machine's own power supply. To avoid
+> back-powering the board while the machine is also energizing it, we recommend
+> this sequence:
+>
+> - **Connecting:** turn the pinball machine **off**, plug in the USB cable,
+>   then turn the machine **on**.
+> - **Disconnecting:** turn the pinball machine **off**, then unplug the USB
+>   cable.
+
 To validate credentials up front instead of failing on the first write:
 
 ```python

@@ -24,6 +24,32 @@ Requires Python 3.9+.
 pip install warpedpinball
 ```
 
+### Recommended: install into a virtual environment
+
+A virtual environment keeps `warpedpinball` and its dependencies isolated from
+your system Python, so nothing you install here can interfere with other
+projects (or with packages your OS manages). This is the recommended way to
+install.
+
+```bash
+# Create a virtual environment in a ".venv" folder
+python3 -m venv .venv
+
+# Activate it
+source .venv/bin/activate          # macOS / Linux
+# .venv\Scripts\activate           # Windows (PowerShell / cmd)
+
+# Install the library into the active environment
+pip install warpedpinball
+
+# Or, to also get USB (serial) support:
+pip install "warpedpinball[usb]"
+```
+
+Once activated, `python`, `pip`, and the `vector` CLI all refer to the
+environment. Run `deactivate` to leave it; re-run the `source` line above to
+come back to it in a new shell.
+
 ## Quickstart
 
 Connect to a machine by name and see what's happening on it:
