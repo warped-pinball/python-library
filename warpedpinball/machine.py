@@ -129,10 +129,9 @@ class Machine:
         def _locked_iter() -> Iterator[bytes]:
             with self._lock:
                 self.transport.password = self.password
-                for chunk in self.transport.stream(
+                yield from self.transport.stream(
                     path, body=body, authenticated=authenticated
-                ):
-                    yield chunk
+                )
 
         return _locked_iter()
 
@@ -424,8 +423,7 @@ class Machine:
         while True:
             status = self.game_status()
             if prev is not None and status != prev:
-                for event in _diff_status(prev, status):
-                    yield event
+                yield from _diff_status(prev, status)
             prev = status
             time.sleep(interval)
 

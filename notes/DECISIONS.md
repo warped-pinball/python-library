@@ -35,6 +35,10 @@ corrected against the real firmware later.
    could not be verified from this repo.
 10. **License**: none committed — needs a product-owner decision before the
     first PyPI release.
-11. **PyPI publishing**: workflow uses PyPI *trusted publishing* (OIDC) on
+11. **`/api/memory-snapshot` auth**: the spec marks `/api/address/read`/`write`
+    as authenticated but never states the snapshot route's auth requirement;
+    `memory_snapshot()` currently calls it unauthenticated. **Verify against
+    `docs/routes.md`** and flip to `authenticated=True` if needed.
+12. **PyPI publishing**: workflow uses PyPI *trusted publishing* (OIDC) on
     GitHub release; the PyPI project must be configured with this repo as a
     trusted publisher before the first release.

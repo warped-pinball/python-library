@@ -132,7 +132,8 @@ def connect_usb(
     (Raspberry Pi VID) is present. Authenticated routes need no password over
     USB — the firmware trusts physical access.
     """
-    from .transports.usb import UsbTransport, list_serial_ports as _lsp
+    from .transports.usb import UsbTransport
+    from .transports.usb import list_serial_ports as _lsp
 
     if port is None:
         candidates = _lsp()

@@ -30,6 +30,8 @@ def _print_json(data: Any) -> None:
 def _connect(args: argparse.Namespace) -> warpedpinball.Machine:
     if getattr(args, "usb", None):
         return warpedpinball.connect_usb(args.usb if args.usb is not True else None)
+    if not args.machine:
+        raise VectorError("a machine name/IP is required unless --usb is given")
     return warpedpinball.connect(
         args.machine, password=getattr(args, "password", None), timeout=args.timeout
     )
@@ -129,7 +131,12 @@ def cmd_update(args: argparse.Namespace) -> int:
 
 
 def _add_target_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("machine", help="machine name (LAN discovery) or IP address")
+    p.add_argument(
+        "machine",
+        nargs="?",
+        default=None,
+        help="machine name (LAN discovery) or IP address (optional with --usb)",
+    )
     p.add_argument("--password", "-p", help="device password (or $VECTOR_PASSWORD)")
     p.add_argument("--timeout", type=float, default=5.0, help="discovery timeout (s)")
     p.add_argument(

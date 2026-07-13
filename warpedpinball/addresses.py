@@ -191,7 +191,7 @@ class AddressMap:
     def load(cls, path: str, active_config: Optional[str] = None) -> "AddressMap":
         """Load a saved map. Warns when ``active_config`` (the machine's
         current ``/api/game/active_config``) doesn't match the saved one."""
-        with open(os.path.expanduser(path), "r", encoding="utf-8") as fh:
+        with open(os.path.expanduser(path), encoding="utf-8") as fh:
             data = json.load(fh)
         amap = cls.from_dict(data)
         if (

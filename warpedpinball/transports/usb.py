@@ -55,7 +55,7 @@ def list_serial_ports(all_ports: bool = False) -> List[str]:
     Filters to the Raspberry Pi USB vendor ID (0x2E8A) unless ``all_ports``
     is true or no port carries VID information.
     """
-    serial = _require_pyserial()
+    _require_pyserial()
     from serial.tools import list_ports
 
     ports = list(list_ports.comports())
