@@ -130,7 +130,7 @@ def connect_usb(
 
     With no ``port``, auto-picks when exactly one candidate serial port
     (Raspberry Pi VID) is present. Authenticated routes need no password over
-    USB — the firmware trusts physical access.
+    USB; the firmware trusts physical access.
     """
     from .transports.usb import UsbTransport
     from .transports.usb import list_serial_ports as _lsp

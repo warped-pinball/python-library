@@ -1,4 +1,4 @@
-"""The :class:`Machine` object — the single place users interact with a device.
+"""The :class:`Machine` object, the single place users interact with a device.
 
 Transport-agnostic (HTTP or USB), thread-safe (one lock per machine; the
 firmware is single-threaded and auth challenges are single-use, so all traffic
@@ -178,7 +178,7 @@ class Machine:
         return self.call("/api/fault")
 
     def peers(self) -> Any:
-        """Peer table from ``GET /api/network/peers`` — discovery without
+        """Peer table from ``GET /api/network/peers``: discovery without
         broadcast (useful across VLANs when you know one IP)."""
         return self.call("/api/network/peers")
 
@@ -249,7 +249,7 @@ class Machine:
     # -- updates -----------------------------------------------------------------
 
     def check_for_updates(self) -> Any:
-        """``/api/update/check`` — note the 10 s server-side cooldown."""
+        """``/api/update/check``. Note the 10 s server-side cooldown."""
         return self.call("/api/update/check")
 
     def apply_update(

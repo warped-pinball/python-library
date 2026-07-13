@@ -15,7 +15,7 @@ Requests over USB bypass HMAC entirely (the firmware trusts physical access),
 so this transport never signs and needs no password.
 
 Streaming responses arrive fully rendered in the ``body`` field (the firmware
-joins generators before sending), so a USB "stream" is one large chunk — large
+joins generators before sending), so a USB "stream" is one large chunk; large
 transfers like ``/api/memory-snapshot`` are buffered in memory on both ends.
 """
 
@@ -154,7 +154,7 @@ class UsbTransport(Transport):
             line = raw.decode("utf-8", errors="replace")
             if RESPONSE_PREFIX in line:
                 return parse_response_line(line)
-            # otherwise: firmware console noise on the shared port — skip it
+            # otherwise: firmware console noise on the shared port, so skip it
         raise TransportError(
             f"Timed out waiting for USB response to {path} on {self.port}"
         )

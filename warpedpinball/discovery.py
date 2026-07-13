@@ -2,7 +2,7 @@
 
 Frame formats (first byte is the message type):
 
-- ``HELLO = 1``: ``bytes([1, name_len]) + name_bytes`` — name is UTF-8, max
+- ``HELLO = 1``: ``bytes([1, name_len]) + name_bytes``; name is UTF-8, max
   32 bytes. Clients broadcast this to ``255.255.255.255:37020``.
 - ``FULL = 2``: ``bytes([2, peer_count])`` then, per peer: 4 raw IP bytes,
   1 name-length byte, name bytes. The board with the lowest IP acts as the

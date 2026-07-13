@@ -1,4 +1,4 @@
-"""``vector`` console entry point — a thin layer over the library.
+"""``vector`` console entry point, a thin layer over the library.
 
     vector discover
     vector status elvira

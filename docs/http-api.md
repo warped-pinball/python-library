@@ -2,7 +2,7 @@
 
 This page documents the raw firmware routes for SRAM access and how to call
 them from the library. Most users should prefer the higher-level wrappers in
-[Reading & writing memory](memory.md) — they handle chunking, decoding, and
+[Reading & writing memory](memory.md), which handle chunking, decoding, and
 authentication for you.
 
 ## Conventions
@@ -14,7 +14,7 @@ authentication for you.
   (`SRAM_DATA_BASE`), not absolute CPU addresses.
 - Authenticated routes use an **HMAC-SHA256 challenge/response** scheme: the
   client fetches a single-use challenge, then signs the exact request body
-  string. The library does this automatically and invisibly whenever you pass
+  string. The library does all of this for you whenever you pass
   `authenticated=True`; over USB the firmware skips authentication entirely.
 
 ## `/api/address/read`
@@ -38,7 +38,7 @@ Response:
 {"offset": 8500, "values": [5, 0, 18, 52, 86, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
 ```
 
-`values` is a list of ints (0–255), one per byte, starting at `offset`.
+`values` is a list of ints (0-255), one per byte, starting at `offset`.
 
 From the library:
 
@@ -51,7 +51,7 @@ result = m.call(
 data = bytes(result["values"])
 ```
 
-For reads larger than 256 bytes, use `m.read_bytes(offset, count)` — it issues
+For reads larger than 256 bytes, use `m.read_bytes(offset, count)`, which issues
 as many requests as needed and concatenates the results.
 
 ## `/api/address/write`
@@ -67,7 +67,7 @@ Request body:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `offset` | int | Start offset into the SRAM data region |
-| `values` | list of int | Byte values (0–255) written consecutively from `offset`; keep to 256 per request |
+| `values` | list of int | Byte values (0-255) written consecutively from `offset`; keep to 256 per request |
 
 From the library:
 
@@ -79,7 +79,7 @@ m.call(
 )
 ```
 
-For larger writes, use `m.write_bytes(offset, data)` — it chunks at 256 bytes
+For larger writes, use `m.write_bytes(offset, data)`, which chunks at 256 bytes
 per request automatically.
 
 > **Careful:** writes go straight into the game's live memory. Writing the
@@ -102,7 +102,7 @@ with open("dump.bin", "wb") as fh:
 
 ## Calling any route: the escape hatch
 
-Every firmware route — including ones without a wrapper — is reachable through
+Every firmware route, including ones without a wrapper, is reachable through
 `Machine.call()` / `Machine.call_stream()`:
 
 ```python
