@@ -3,7 +3,7 @@
 The firmware reads and writes raw SRAM bytes but can't store names for them.
 An `AddressMap` maps friendly names to `(offset, length, encoding)` so your
 code can say `m.read("player1_score")` instead of remembering that scores live
-at `0x0200` as 4 bytes of packed BCD — and so mod makers can **ship an address
+at `0x0200` as 4 bytes of packed BCD, and so mod makers can **ship an address
 map for a specific game ROM** alongside their code.
 
 ## Defining addresses
@@ -27,17 +27,17 @@ m.write("credits", 5)
 
 `define(name, offset, length=1, encoding=None)`:
 
-- **offset** — relative to the start of the SRAM data region, same as the
+- **offset**: relative to the start of the SRAM data region, same as the
   offsets used by [`read_bytes()`](memory.md).
-- **length** — bytes occupied (default 1).
-- **encoding** — how bytes map to Python values (below). With no encoding, a
+- **length**: bytes occupied (default 1).
+- **encoding**: how bytes map to Python values (below). With no encoding, a
   1-byte entry reads as an `int` and longer entries read as `bytes`.
 
 ## Encodings
 
 | Encoding | Decodes to | Notes |
 | --- | --- | --- |
-| `"bcd"` | `int` | Packed BCD, most-significant byte first, two decimal digits per byte — the classic Williams/Bally score format. `b'\x12\x34\x56'` ⇄ `123456`. |
+| `"bcd"` | `int` | Packed BCD, most-significant byte first, two decimal digits per byte; the classic Williams/Bally score format. `b'\x12\x34\x56'` is `123456`. |
 | `"le_uint"` | `int` | Little-endian unsigned integer |
 | `"be_uint"` | `int` | Big-endian unsigned integer |
 | `None` (default) | `int` (1 byte) or `bytes` | Raw |
@@ -45,7 +45,7 @@ m.write("credits", 5)
 
 Writes go through the matching encoder, so `m.write("player1_score", 50000)`
 turns the int back into BCD bytes before sending. Values that don't fit the
-declared length raise `ValueError` locally — nothing is sent to the device.
+declared length raise `ValueError` locally; nothing is sent to the device.
 
 ### Custom encodings
 
@@ -67,7 +67,7 @@ m.write("champion_initials", "ABC")
 ```
 
 Custom callable encodings can't be serialized, so entries using them are
-excluded from `save()` — use the built-in string encodings for maps you intend
+excluded from `save()`. Use the built-in string encodings for maps you intend
 to share.
 
 ## Sharing maps as JSON
@@ -91,7 +91,7 @@ The file is plain JSON, easy to hand-edit or check into a mod's repository:
 ```
 
 `AddressMap.load(path, active_config=...)` warns when the map was built for a
-different game config than the machine currently reports — offsets from the
+different game config than the machine currently reports. Offsets from the
 wrong ROM will read garbage (and writing through them can corrupt game state),
 so don't ignore that warning.
 
@@ -121,7 +121,7 @@ amap = AddressMap.load_registry("elvira_l4")   # None if no file exists
 ## Finding addresses in the first place
 
 Use full-memory snapshots and diff them while changing exactly one thing on
-the machine — see [Whole-memory snapshots](memory.md#whole-memory-snapshots).
+the machine; see [Whole-memory snapshots](memory.md#whole-memory-snapshots).
 Once an offset behaves consistently, `define()` it, verify with a few reads,
 and share the JSON.
 

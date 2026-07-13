@@ -25,7 +25,7 @@ def serialize_body(body: Any) -> Optional[str]:
     """Serialize a request body to the exact string sent (and signed).
 
     Strings pass through untouched; dicts/lists are JSON-encoded compactly,
-    exactly once — the same string must be both signed and transmitted.
+    exactly once: the same string must be both signed and transmitted.
     """
     if body is None:
         return None
@@ -99,7 +99,7 @@ class Transport(ABC):
     ``Machine`` methods work identically over both."""
 
     #: True when authenticated routes need a password on this transport.
-    #: (USB bypasses HMAC entirely — the firmware trusts physical access.)
+    #: (USB bypasses HMAC entirely; the firmware trusts physical access.)
     requires_password: bool = True
 
     #: Password used for HMAC signing (ignored by transports that don't sign).
