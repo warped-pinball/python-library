@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "warped-pinball-vector"
+version = "0.1.0"
+description = "Python client for Warped Pinball Vector boards (HTTP, USB serial, and UDP discovery)"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Warped Pinball" }]
+keywords = ["pinball", "warped-pinball", "vector", "raspberry-pi-pico"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment :: Arcade",
+    "Topic :: System :: Hardware",
+]
+dependencies = ["requests>=2.25"]
+
+[project.optional-dependencies]
+usb = ["pyserial>=3.5"]
+dev = ["pytest>=7", "ruff>=0.4", "pyserial>=3.5", "build"]
+
+[project.urls]
+Homepage = "https://github.com/warped-pinball/python-library"
+Issues = "https://github.com/warped-pinball/python-library/issues"
+
+[project.scripts]
+vector = "warpedpinball.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["warpedpinball"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "UP006", # keep typing.List etc. while supporting 3.9 without future imports everywhere
+    "UP007",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
