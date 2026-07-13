@@ -33,8 +33,8 @@ corrected against the real firmware later.
    (`Score`, `Player`, `GameStatus`, `UpdateInfo`) users can wrap raw payloads
    in; they are not forced on return values because the exact firmware shapes
    could not be verified from this repo.
-10. **License**: none committed — needs a product-owner decision before the
-    first PyPI release.
+10. **License**: MIT, committed as `LICENSE` and declared via `license = "MIT"`
+    in `pyproject.toml`.
 11. **`/api/memory-snapshot` auth**: the spec marks `/api/address/read`/`write`
     as authenticated but never states the snapshot route's auth requirement;
     `memory_snapshot()` currently calls it unauthenticated. **Verify against
