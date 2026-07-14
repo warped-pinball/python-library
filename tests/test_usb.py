@@ -123,3 +123,107 @@ def test_close_closes_port():
     t = make_transport([])
     t.close()
     assert t._serial.closed
+
+
+def test_close_swallows_errors():
+    class BadSerial(FakeSerial):
+        def close(self):
+            raise OSError("device gone")
+
+    t = UsbTransport("/dev/fake", timeout=0.5, _serial=BadSerial())
+    t.close()  # must not raise
+
+
+def test_reset_input_buffer_error_is_ignored():
+    class NoReset(FakeSerial):
+        def reset_input_buffer(self):
+            raise OSError("unsupported")
+
+    serial = NoReset([usb_response(body="{}")])
+    t = UsbTransport("/dev/fake", timeout=0.5, _serial=serial)
+    assert t.request("/api/version") == {}
+
+
+def test_write_failure_raises_transport_error():
+    class BadWrite(FakeSerial):
+        def write(self, data):
+            raise OSError("write failed")
+
+    t = UsbTransport("/dev/fake", timeout=0.5, _serial=BadWrite())
+    with pytest.raises(TransportError, match="write to .* failed"):
+        t.request("/api/version")
+
+
+def test_read_failure_raises_transport_error():
+    class BadRead(FakeSerial):
+        def readline(self):
+            raise OSError("read failed")
+
+    t = UsbTransport("/dev/fake", timeout=0.5, _serial=BadRead())
+    with pytest.raises(TransportError, match="read from .* failed"):
+        t.request("/api/version")
+
+
+def test_response_missing_status_field_raises():
+    line = (RESPONSE_PREFIX + json.dumps({"route": "/x", "body": ""}) + "\n").encode()
+    t = make_transport([line])
+    with pytest.raises(TransportError, match="Unexpected USB response envelope"):
+        t.request("/api/version")
+
+
+def test_stream_empty_body_yields_nothing():
+    t = make_transport([usb_response(body="")])
+    assert list(t.stream("/api/memory-snapshot")) == []
+
+
+def test_stream_non_string_body_passed_through():
+    # Defensive: if a body arrives already decoded (not a str), it is yielded
+    # as-is rather than re-encoded.
+    line = (
+        RESPONSE_PREFIX
+        + json.dumps({"route": "/x", "status": 200, "headers": {}, "body": [1, 2, 3]})
+        + "\n"
+    ).encode()
+    t = make_transport([line])
+    assert list(t.stream("/api/x")) == [[1, 2, 3]]
+
+
+def test_description_includes_port():
+    t = make_transport([])
+    assert t.description == "usb:/dev/fake"
+
+
+def test_require_pyserial_returns_module():
+    import warpedpinball.transports.usb as usb_mod
+
+    serial = usb_mod._require_pyserial()  # pyserial installed via the usb extra
+    assert hasattr(serial, "Serial")
+
+
+def test_list_serial_ports_filters_by_vid(monkeypatch):
+    import warpedpinball.transports.usb as usb_mod
+
+    class Port:
+        def __init__(self, device, vid):
+            self.device = device
+            self.vid = vid
+
+    ports = [
+        Port("/dev/ttyACM0", usb_mod.RASPBERRY_PI_VID),
+        Port("/dev/ttyUSB9", 0x1234),  # some other device
+    ]
+
+    class FakeListPorts:
+        @staticmethod
+        def comports():
+            return ports
+
+    monkeypatch.setattr(usb_mod, "_require_pyserial", lambda: None)
+    import serial.tools
+    monkeypatch.setattr(serial.tools, "list_ports", FakeListPorts, raising=False)
+
+    assert usb_mod.list_serial_ports() == ["/dev/ttyACM0"]
+    assert set(usb_mod.list_serial_ports(all_ports=True)) == {
+        "/dev/ttyACM0",
+        "/dev/ttyUSB9",
+    }

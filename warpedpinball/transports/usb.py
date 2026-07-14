@@ -107,7 +107,7 @@ class UsbTransport(Transport):
         self.timeout = timeout
         if _serial is not None:
             self._serial = _serial  # injected fake for tests
-        else:
+        else:  # pragma: no cover - opens a real serial port (needs hardware)
             serial = _require_pyserial()
             try:
                 self._serial = serial.Serial(port, BAUD_RATE, timeout=timeout)

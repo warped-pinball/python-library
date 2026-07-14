@@ -231,3 +231,72 @@ def test_other_request_exception_stays_generic_transport_error():
         t.request("/api/x", body={})
     assert not isinstance(exc_info.value, (DeviceTimeoutError, DeviceUnreachableError))
     assert "/api/x" in str(exc_info.value)
+
+
+def test_description_is_base_url():
+    assert make_transport().description == "http://192.168.1.42"
+
+
+def test_challenge_fetch_connection_error_is_typed():
+    class BadGetSession(FakeSession):
+        def get(self, url, timeout=None):
+            raise requests.exceptions.ConnectionError("refused")
+
+    t = make_transport(BadGetSession(), password="pw")
+    with pytest.raises(DeviceUnreachableError):
+        t.request("/api/settings/reboot", body={}, authenticated=True)
+
+
+def test_get_retries_once_on_connection_error_then_succeeds():
+    class FlakyGetSession(FakeSession):
+        def __init__(self):
+            super().__init__()
+            self.attempts = 0
+
+        def request(self, *args, **kwargs):
+            self.attempts += 1
+            if self.attempts == 1:
+                raise requests.exceptions.ConnectionError("blip")
+            return FakeResponse(200, text='{"ok": true}')
+
+    session = FlakyGetSession()
+    t = make_transport(session)
+    assert t.request("/api/version") == {"ok": True}  # unauthenticated GET
+    assert session.attempts == 2  # first failed, retried, second succeeded
+
+
+def test_get_retry_exhausted_raises():
+    exc = requests.exceptions.ConnectionError("down")
+    t = make_transport(RaisingSession(exc))
+    with pytest.raises(DeviceUnreachableError):
+        t.request("/api/version")  # GET: one retry, then surfaces
+
+
+def test_stream_error_status_raises_before_iterating():
+    session = FakeSession()
+    session.responses = [FakeResponse(404, text="")]
+    with pytest.raises(UnsupportedFirmwareError):
+        list(make_transport(session).stream("/api/memory-snapshot"))
+
+
+def test_stream_skips_empty_chunks():
+    session = FakeSession()
+    session.responses = [FakeResponse(200, chunks=[b"", b"data", b""])]
+    chunks = list(make_transport(session).stream("/api/memory-snapshot"))
+    assert chunks == [b"data"]  # empty chunks filtered out
+
+
+def test_stream_iter_content_error_is_typed():
+    class ErroringResponse(FakeResponse):
+        def iter_content(self, chunk_size=4096):
+            def _gen():
+                yield b"partial"
+                raise requests.exceptions.ConnectionError("dropped mid-stream")
+
+            return _gen()
+
+    session = FakeSession()
+    session.responses = [ErroringResponse(200)]
+    stream = make_transport(session).stream("/api/memory-snapshot")
+    with pytest.raises(DeviceUnreachableError):
+        list(stream)

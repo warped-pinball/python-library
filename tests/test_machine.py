@@ -324,3 +324,97 @@ def test_repr_mentions_name_and_transport():
     machine.name = "Elvira"
     assert "Elvira" in repr(machine)
     assert "fake:transport" in repr(machine)
+
+
+def test_version_records_scalar_firmware_string():
+    # Non-dict, non-None result path: firmware version stored as str(result).
+    machine, _ = make_machine(responses={"/api/version": "1.9.0"})
+    assert machine.version() == "1.9.0"
+    assert machine._firmware_version == "1.9.0"
+
+
+def test_wait_until_reachable_times_out(monkeypatch):
+    from warpedpinball.exceptions import TransportError
+
+    monkeypatch.setattr("warpedpinball.machine.time.sleep", lambda _s: None)
+    # monotonic advances past the deadline immediately after first attempt.
+    ticks = iter([0.0, 0.0, 100.0, 200.0])
+    monkeypatch.setattr(
+        "warpedpinball.machine.time.monotonic", lambda: next(ticks, 300.0)
+    )
+    machine, _ = make_machine(
+        responses={"/api/version": TransportError("still down")}
+    )
+    with pytest.raises(TransportError, match="did not become reachable"):
+        machine.wait_until_reachable(timeout=1)
+
+
+def test_apply_update_wraps_non_json_lines_as_log():
+    machine, _ = make_machine(
+        responses={"/api/update/check": {"url": "http://u/fw.bin"}},
+        streams={"/api/update/apply": [b"plain progress text\n"]},
+        password="pw",
+    )
+    records = machine.apply_update()
+    assert records == [{"log": "plain progress text"}]
+
+
+def test_diff_status_non_list_scores_emits_single_event():
+    from warpedpinball.machine import _diff_status
+
+    events = _diff_status({"score": 100}, {"score": 250})
+    score_events = [e for e in events if e.type == "score_changed"]
+    assert len(score_events) == 1
+    assert score_events[0].old == 100
+    assert score_events[0].new == 250
+
+
+def test_find_key_non_dict_returns_none():
+    from warpedpinball.machine import _find_key
+
+    assert _find_key(["not", "a", "dict"], "score") is None
+    assert _find_key(None, "score") is None
+
+
+def test_parse_device_date_short_rtc_list():
+    from warpedpinball.machine import _parse_device_date
+
+    # 6-element list (no weekday/sub): year, month, day, hour, minute, second.
+    dt = _parse_device_date([2026, 7, 13, 17, 30, 45])
+    assert dt == datetime.datetime(2026, 7, 13, 17, 30, 45)
+
+
+def test_parse_device_date_bad_iso_string_raises():
+    from warpedpinball.machine import _parse_device_date
+
+    with pytest.raises(VectorError, match="Unrecognized date"):
+        _parse_device_date("not-a-date")
+
+
+def test_version_none_result_leaves_firmware_unset():
+    machine, _ = make_machine(responses={"/api/version": None})
+    assert machine.version() is None
+    assert machine._firmware_version is None
+
+
+def test_apply_update_non_dict_check_result_raises():
+    machine, _ = make_machine(
+        responses={"/api/update/check": "no structured update info"},
+        password="pw",
+    )
+    with pytest.raises(VectorError, match="update URL"):
+        machine.apply_update()
+
+
+def test_iter_lines_skips_blank_lines():
+    from warpedpinball.machine import _iter_lines
+
+    lines = list(_iter_lines(iter([b"a\n\n\nb\n"])))
+    assert lines == ["a", "b"]  # blank lines between newlines dropped
+
+
+def test_diff_status_non_dict_inputs_yield_status_changed():
+    from warpedpinball.machine import _diff_status
+
+    events = _diff_status([1, 2], [3, 4])
+    assert [e.type for e in events] == ["status_changed"]
