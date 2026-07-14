@@ -95,14 +95,17 @@ def _match_by_name(name: str, machines: List[DiscoveredMachine]) -> DiscoveredMa
 def connect(
     name_or_ip: str,
     password: Optional[str] = None,
-    timeout: float = 5.0,
+    timeout: float = 20.0,
     http_timeout: float = 10.0,
 ) -> Machine:
     """Connect to a machine by LAN name (via UDP discovery) or by IP address.
 
-    Name matching is case-insensitive: exact match first, then unique
-    prefix/substring. Raises :class:`MachineNotFoundError` (listing the names
-    that *were* seen) or :class:`AmbiguousMachineError` (listing candidates).
+    ``timeout`` is how long (seconds) to listen for the named board during UDP
+    discovery; it defaults to 20 s so slow-to-answer boards are still found,
+    and is ignored when connecting straight to an IP. Name matching is
+    case-insensitive: exact match first, then unique prefix/substring. Raises
+    :class:`MachineNotFoundError` (listing the names that *were* seen) or
+    :class:`AmbiguousMachineError` (listing candidates).
     """
     machine_name: Optional[str] = None
     if _is_ip(name_or_ip):
