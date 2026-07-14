@@ -1,17 +1,17 @@
 """Live ELVIRA hurry-up display for an Elvira pinball machine.
 
-Spell out ELVIRA in the terminal and light a letter red each time the player
-makes the hurry-up shot.
+Spell out ELVIRA in the terminal, lighting the letters red as the machine
+awards them, with the hurry-up countdown shown while a shot is live.
 
-The letters byte the machine exposes isn't trustworthy during a hurry-up -- the
-machine sets it to 4 preemptively -- so we watch the hurry-up *timer* instead
-(address 0x0175, read twice a second):
+The letters byte (0x076D) is truthful except during a hurry-up, when the
+machine preemptively sets it to 4. The tell is the timer (0x0175): it only
+moves while a hurry-up is running (it arms at 20, sits there through a short
+intro, then ticks down once a second). So we poll twice a second and:
 
-* it arms at 20 and holds there for a beat while a short intro plays;
-* then it ticks down once a second;
-* if it freezes partway down (stops updating for more than a second) the shot
-  was made -- light the next letter;
-* if it reaches 0, the shot was missed.
+* while the timer is changing (or briefly holding at 20 for the intro), a
+  hurry-up is live -- keep the letters we last trusted and show the countdown;
+* once the timer stops moving for over a second, the hurry-up is over (made,
+  missed, or none running) -- show the letters byte faithfully.
 
     python examples/elvira_hurryup.py
 """
@@ -31,8 +31,10 @@ RESET = "\033[0m"
 CLEAR_EOL = "\033[K"  # erase from the cursor to the end of the line
 
 TIMER_ADDR = 0x0175
-READ_PERIOD = 0.5   # seconds between reads
-FROZEN_AFTER = 1.5  # timer unchanged this long (> the 1 s tick) => it stopped
+LETTERS_ADDR = 0x076D
+READ_PERIOD = 0.5    # seconds between reads
+FROZEN_AFTER = 1.5   # timer unchanged this long (> the 1 s tick) => not live
+INTRO_GRACE = 2.5    # the intro holds the timer at 20 a bit longer than a tick
 
 machine = warpedpinball.connect("Elvira", password="pinball")
 
@@ -43,15 +45,14 @@ def draw(text):
     print("\r" + text + CLEAR_EOL, end="", flush=True)
 
 
-earned = 0                      # ELVIRA letters lit so far
-previous_timer = None           # last timer reading
-last_change = time.monotonic()  # when the timer last changed value
-counting = False                # True once the timer has started ticking down
-resolved = True                 # True once this hurry-up is made/missed (or idle)
+lit = 0
+previous_timer = None
+last_change = float("-inf")  # when the timer last changed value
 
 while True:
     try:
         timer = machine.read(TIMER_ADDR)
+        letters = machine.read(LETTERS_ADDR)
     except TransportError as error:
         # A dropped packet or a busy board shouldn't kill the display.
         draw(str(error))
@@ -59,37 +60,29 @@ while True:
         continue
 
     now = time.monotonic()
-    if previous_timer is None:
-        previous_timer = timer  # first read: nothing to compare against yet
-
-    if timer != previous_timer:
+    # The first read is a baseline, not a change: a stale timer value at
+    # startup must not look "live", so mid-game the letters show right away.
+    if previous_timer is not None and timer != previous_timer:
         last_change = now
-        if timer > previous_timer or previous_timer - timer > 3:
-            # The board (re)armed the timer: a new hurry-up is starting. The
-            # intro plays now, so the value sits still for a beat before ticking.
-            counting = False
-            resolved = False
-        elif timer == 0:
-            resolved = True   # ticked all the way down: shot missed
-        else:
-            counting = True   # a normal 1-per-second tick: we're past the intro
-
-    # A live countdown that stops partway down means the shot was made. (The
-    # intro also sits still, but counting is still False then, so it's ignored.)
-    if counting and not resolved and timer > 0 and now - last_change > FROZEN_AFTER:
-        earned = min(earned + 1, len(WORD))
-        resolved = True
-        counting = False
-
     previous_timer = timer
 
-    # Light the earned letters red and dim the rest, so ELVIRA fills in.
+    # The timer only moves while a hurry-up is live. Allow a little extra
+    # stillness at 20, where it waits out the intro before ticking.
+    grace = INTRO_GRACE if timer == 20 else FROZEN_AFTER
+    hurryup_live = timer > 0 and (now - last_change) < grace
+
+    # The letters byte is only wrong *during* a hurry-up (preemptively set to
+    # 4); the rest of the time, believe it. While one is live, keep the last
+    # trusted value so the word doesn't dip.
+    if not hurryup_live:
+        lit = letters
+
+    # Light the awarded letters red and dim the rest, so ELVIRA fills in.
     line = "".join(
-        (RED if i < earned else DIM) + letter + RESET + " "
+        (RED if i < lit else DIM) + letter + RESET + " "
         for i, letter in enumerate(WORD)
     )
-    # Show the countdown only while a hurry-up is live (not once it's resolved).
-    if not resolved and timer > 0:
+    if hurryup_live:
         line += f" {timer:>3}"
     draw(line)
     time.sleep(READ_PERIOD)

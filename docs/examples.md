@@ -17,32 +17,33 @@ one letter red each time the player makes the hurry-up shot.
 python examples/elvira_hurryup.py
 ```
 
-The interesting part is that the obvious byte to read — the letter count at
-`0x076D` — can't be trusted: while a hurry-up is running the machine sets it to
-4 preemptively, even though the letters you've earned are still lit. So the
-script ignores it and reads the hurry-up **timer** (`0x0175`) twice a second,
-inferring the outcome from how it moves:
-
-- it **arms at 20** and holds there for a beat while a short intro plays;
-- then it **ticks down once a second**;
-- if it **freezes partway down** — stops updating for more than a second — the
-  shot was made, so we light the next letter;
-- if it **reaches 0**, the shot was missed.
-
-The one subtlety is telling the intro (timer sitting still at 20) apart from a
-made shot (timer sitting still partway down). A `counting` flag, set only once
-the timer has actually started ticking down, does that:
+The interesting part: the letter count at `0x076D` is truthful *except* while a
+hurry-up is running, when the machine preemptively sets it to 4 even though the
+letters you've earned stay lit. The tell is the **timer** (`0x0175`) — it only
+moves while a hurry-up is live. It arms at 20, sits there through a short
+intro, then ticks down once a second; when the shot is made it freezes, and
+when it's missed it reaches 0. So the script polls both bytes twice a second
+and uses the timer's *motion* to decide when to believe the letters:
 
 ```python
-if counting and not resolved and timer > 0 and now - last_change > FROZEN_AFTER:
-    earned = min(earned + 1, len(WORD))   # timer stopped mid-countdown: made
-    resolved = True
-    counting = False
+grace = INTRO_GRACE if timer == 20 else FROZEN_AFTER
+hurryup_live = timer > 0 and (now - last_change) < grace
+
+if not hurryup_live:
+    lit = letters      # timer still => no hurry-up running: byte is truthful
 ```
 
-`FROZEN_AFTER` is 1.5 s — comfortably longer than the 1 s tick, so a normal
-countdown never looks "stopped." Because it tracks made shots itself, the
-display starts empty and fills in as you make shots while it's watching.
+While the timer is moving, the display keeps the last trusted letter count (so
+the word never dips to 4) and shows the countdown. Once the timer stops for
+more than `FROZEN_AFTER` (1.5 s — comfortably longer than the 1 s tick, so a
+normal countdown never looks "stopped"), whatever the machine now reports is
+shown faithfully. `INTRO_GRACE` (2.5 s) allows the extra stillness at 20 while
+the intro plays. Because the letters byte is re-read whenever no hurry-up is
+live, starting the script mid-game shows the correct letters immediately.
+
+One startup detail: the first read is treated as a baseline, not a change —
+otherwise a stale timer value left in memory would look "live" for the first
+second and briefly hide the true letters.
 
 Two more small things worth copying:
 
