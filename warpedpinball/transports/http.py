@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from typing import Any, Iterator, Optional
+from urllib.parse import urlsplit
 
 import requests
 
@@ -11,6 +12,8 @@ from .. import auth
 from ..exceptions import (
     AuthenticationError,
     AuthenticationRequiredError,
+    DeviceTimeoutError,
+    DeviceUnreachableError,
     RateLimitedError,
     TransportError,
 )
@@ -39,6 +42,8 @@ class HttpTransport(Transport):
         if not host.startswith("http://") and not host.startswith("https://"):
             host = "http://" + host
         self.base_url = host
+        #: Bare host[:port] for error messages (no scheme/path noise).
+        self._host_label = urlsplit(self.base_url).netloc or self.base_url
         self.password = password
         self.timeout = timeout
         self._session = session or requests.Session()
@@ -52,6 +57,22 @@ class HttpTransport(Transport):
 
     # -- internals ---------------------------------------------------------
 
+    def _wrap_request_exc(
+        self, exc: requests.RequestException, path: str
+    ) -> TransportError:
+        """Turn a raw requests/urllib3 error into a clean, typed TransportError.
+
+        Timeouts and connection failures are the common, user-facing cases and
+        get their own friendly subclasses; anything else keeps a compact
+        message. The original exception is preserved on ``.cause`` (and these
+        are raised ``from None`` so an uncaught error prints one short
+        traceback, not the full urllib3/requests stack)."""
+        if isinstance(exc, requests.exceptions.Timeout):
+            return DeviceTimeoutError(self._host_label, timeout=self.timeout, cause=exc)
+        if isinstance(exc, requests.exceptions.ConnectionError):
+            return DeviceUnreachableError(self._host_label, cause=exc)
+        return TransportError(f"Request to {self._host_label}{path} failed: {exc}")
+
     def _fetch_challenge(self) -> str:
         """Fetch a fresh single-use challenge (never cached)."""
         for attempt in range(CHALLENGE_RETRIES + 1):
@@ -60,7 +81,7 @@ class HttpTransport(Transport):
                     self.base_url + auth.CHALLENGE_PATH, timeout=self.timeout
                 )
             except requests.RequestException as exc:
-                raise TransportError(f"Failed to fetch auth challenge: {exc}") from exc
+                raise self._wrap_request_exc(exc, auth.CHALLENGE_PATH) from None
             if resp.status_code == 429:
                 if attempt < CHALLENGE_RETRIES:
                     time.sleep(CHALLENGE_RETRY_SLEEP)
@@ -110,7 +131,7 @@ class HttpTransport(Transport):
                 if retries > 0:
                     retries -= 1
                     continue
-                raise TransportError(f"{method} {url} failed: {exc}") from exc
+                raise self._wrap_request_exc(exc, path) from None
 
     def _request_with_auth_retry(
         self, path: str, body_str: Optional[str], authenticated: bool, stream: bool
@@ -150,7 +171,7 @@ class HttpTransport(Transport):
                     if chunk:
                         yield chunk
             except requests.RequestException as exc:
-                raise TransportError(f"Stream from {path} failed: {exc}") from exc
+                raise self._wrap_request_exc(exc, path) from None
             finally:
                 resp.close()
 

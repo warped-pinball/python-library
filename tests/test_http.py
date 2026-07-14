@@ -3,6 +3,7 @@
 import json
 
 import pytest
+import requests
 from conftest import FakeResponse, FakeSession
 
 from warpedpinball import auth
@@ -10,7 +11,10 @@ from warpedpinball.exceptions import (
     AuthenticationError,
     AuthenticationRequiredError,
     CooldownError,
+    DeviceTimeoutError,
+    DeviceUnreachableError,
     RateLimitedError,
+    TransportError,
     UnsupportedFirmwareError,
     VectorServerError,
 )
@@ -169,3 +173,61 @@ def test_close_closes_session():
     session = FakeSession()
     make_transport(session).close()
     assert session.closed
+
+
+class RaisingSession(FakeSession):
+    """FakeSession whose POST always raises the given requests exception."""
+
+    def __init__(self, exc):
+        super().__init__()
+        self._exc = exc
+
+    def request(self, *args, **kwargs):
+        raise self._exc
+
+
+@pytest.mark.parametrize(
+    "exc,expected",
+    [
+        (requests.exceptions.ReadTimeout("read timed out"), DeviceTimeoutError),
+        (requests.exceptions.ConnectTimeout("connect timed out"), DeviceTimeoutError),
+        (requests.exceptions.ConnectionError("refused"), DeviceUnreachableError),
+    ],
+)
+def test_timeout_and_connection_errors_are_typed(exc, expected):
+    t = make_transport(RaisingSession(exc))
+    with pytest.raises(expected) as exc_info:
+        t.request("/api/x", body={})  # POST: no GET-retry, surfaces immediately
+    err = exc_info.value
+    assert isinstance(err, TransportError)  # subclass, old handlers still catch it
+    assert err.cause is exc  # original preserved for debugging
+    assert "192.168.1.42" in str(err)
+
+
+def test_transport_error_message_is_clean_without_urllib3_noise():
+    exc = requests.exceptions.ReadTimeout(
+        "HTTPConnectionPool(host='192.168.1.42', port=80): Read timed out."
+    )
+    t = make_transport(RaisingSession(exc))
+    with pytest.raises(DeviceTimeoutError) as exc_info:
+        t.request("/api/x", body={})
+    assert "HTTPConnectionPool" not in str(exc_info.value)
+
+
+def test_transport_error_suppresses_chained_traceback():
+    exc = requests.exceptions.ConnectionError("refused")
+    t = make_transport(RaisingSession(exc))
+    with pytest.raises(DeviceUnreachableError) as exc_info:
+        t.request("/api/x", body={})
+    # raised `from None`, so an uncaught error prints one short traceback
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__suppress_context__ is True
+
+
+def test_other_request_exception_stays_generic_transport_error():
+    exc = requests.exceptions.TooManyRedirects("loop")
+    t = make_transport(RaisingSession(exc))
+    with pytest.raises(TransportError) as exc_info:
+        t.request("/api/x", body={})
+    assert not isinstance(exc_info.value, (DeviceTimeoutError, DeviceUnreachableError))
+    assert "/api/x" in str(exc_info.value)
