@@ -38,13 +38,16 @@ board raises a `TransportError` (now with a clean, one-line message — no
 
 ```python
 try:
-    timer = machine.read_bytes(0x0175, 1)[0]
-    letters = machine.read_bytes(0x076D, 1)[0]
+    timer = machine.read(0x0175)
+    letters = machine.read(0x076D)
 except TransportError as error:
     print("\r" + str(error), end="", flush=True)
     time.sleep(1)
     continue
 ```
+
+`read(offset)` returns the byte at that address as an `int` — see
+[reading memory](memory.md#a-single-value-read).
 
 See [error handling](machine.md#connection-and-timeout-failures) for the
 `TransportError` family. To point this at a different machine or memory map,

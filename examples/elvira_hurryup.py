@@ -24,8 +24,8 @@ machine = warpedpinball.connect("Elvira", password="pinball")
 previous_timer = 0
 while True:
     try:
-        timer = machine.read_bytes(0x0175, 1)[0]      # hurry-up countdown
-        letters = machine.read_bytes(0x076D, 1)[0]    # letters awarded so far
+        timer = machine.read(0x0175)      # hurry-up countdown
+        letters = machine.read(0x076D)    # letters awarded so far
     except TransportError as error:
         # A dropped packet or a busy board shouldn't kill the display; the
         # library gives us a clean message, so show it and try again.
