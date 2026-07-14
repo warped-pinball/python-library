@@ -44,6 +44,69 @@ jobs:
       - name: Test
         run: python -m pytest
 
+  coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev,usb]"
+
+      - name: Coverage (this branch)
+        run: >
+          python -m pytest
+          --cov=warpedpinball --cov-config="$GITHUB_WORKSPACE/pyproject.toml"
+          --cov-report=term-missing --cov-report=json:coverage-head.json
+
+      # For pull requests, measure the base branch too so we can compare. The
+      # base source is checked out into a worktree and installed over the head
+      # editable install; the head install is restored afterwards. Both runs
+      # use this branch's coverage config (via --cov-config) so the base and
+      # head numbers are measured identically even if the base predates it.
+      - name: Coverage (base branch)
+        if: github.event_name == 'pull_request'
+        run: |
+          git worktree add /tmp/base-src ${{ github.event.pull_request.base.sha }}
+          python -m pip install -e /tmp/base-src
+          ( cd /tmp/base-src && python -m pytest \
+              --cov=warpedpinball --cov-config="$GITHUB_WORKSPACE/pyproject.toml" \
+              --cov-report=json:/tmp/coverage-base.json ) || true
+          cp /tmp/coverage-base.json coverage-base.json 2>/dev/null || echo '{}' > coverage-base.json
+          python -m pip install -e ".[dev,usb]"
+
+      - name: Compare coverage against base
+        id: cov
+        if: github.event_name == 'pull_request'
+        run: >
+          python scripts/coverage_diff.py coverage-head.json
+          --base coverage-base.json
+          --comment-file coverage-comment.md
+
+      - name: Post coverage comment
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: coverage
+          path: coverage-comment.md
+
+      - name: Flag coverage decrease
+        if: github.event_name == 'pull_request' && steps.cov.outputs.decreased == 'true'
+        run: |
+          echo "::error::Total coverage decreased compared to the base branch (see the coverage comment)."
+          exit 1
+
+      - name: Coverage summary
+        if: github.event_name != 'pull_request'
+        run: python scripts/coverage_diff.py coverage-head.json
+
   build:
     runs-on: ubuntu-latest
     steps:

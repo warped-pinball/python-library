@@ -28,7 +28,7 @@ dependencies = ["requests>=2.25"]
 
 [project.optional-dependencies]
 usb = ["pyserial>=3.5"]
-dev = ["pytest>=7", "ruff>=0.4", "pyserial>=3.5", "build"]
+dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.4", "pyserial>=3.5", "build"]
 
 [project.urls]
 Homepage = "https://github.com/warped-pinball/python-library"
@@ -63,3 +63,14 @@ ignore = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.coverage.run]
+# Measure the package itself (not the tests). ``relative_files`` records paths
+# relative to the repo root so coverage data produced from the base checkout
+# and the PR checkout compare cleanly in scripts/coverage_diff.py.
+source = ["warpedpinball"]
+branch = true
+relative_files = true
+
+[tool.coverage.report]
+show_missing = true
