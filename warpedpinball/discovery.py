@@ -83,15 +83,19 @@ def _open_socket() -> socket.socket:
 
 
 def discover(
-    timeout: float = 5.0,
+    timeout: float = 20.0,
     name: Optional[str] = None,
     client_name: str = DEFAULT_CLIENT_NAME,
 ) -> List[DiscoveredMachine]:
-    """Broadcast HELLO and collect boards from FULL replies.
+    """Broadcast HELLO and collect boards from the registry's FULL reply.
 
-    Listens for ``timeout`` seconds, re-broadcasting HELLO every ~2 s. When
-    ``name`` is given, returns early as soon as a case-insensitive exact match
-    is seen (used by ``connect()``). Results are deduplicated by IP.
+    Boards broadcast infrequently to keep their processing light, so getting a
+    reply can take a while -- ``timeout`` (default 20 s) is how long to wait,
+    re-broadcasting HELLO every ~2 s. But a FULL frame is the registry's
+    *complete* list of known boards, so discovery returns the moment one
+    arrives rather than burning the whole timeout. ``name`` lets it also return
+    the instant that exact board appears in a reply. Results are deduplicated
+    by IP.
     """
     sock = _open_socket()
     hello = build_hello(client_name)
@@ -121,6 +125,11 @@ def discover(
                 found[machine.ip] = machine
                 if target and machine.name.lower() == target:
                     return list(found.values())
+            # A FULL frame is the registry's complete list of known boards, so
+            # once we have one there is nothing more to wait for -- return
+            # instead of burning the rest of the (deliberately long) timeout.
+            if len(data) >= 2 and data[0] == MSG_FULL:
+                return list(found.values())
     finally:
         sock.close()
     return list(found.values())

@@ -4,7 +4,7 @@ Quickstart::
 
     import warpedpinball
 
-    machines = warpedpinball.discover(timeout=5)
+    machines = warpedpinball.discover()
     m = warpedpinball.connect("elvira", password="hunter2")
     print(m.leaderboard())
 """

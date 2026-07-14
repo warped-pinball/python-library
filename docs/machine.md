@@ -10,7 +10,7 @@ errors you might see.
 import warpedpinball
 
 # Find every Vector board on the LAN (UDP broadcast, port 37020)
-for m in warpedpinball.discover(timeout=5):
+for m in warpedpinball.discover():
     print(m.name, m.ip)
 
 # Connect by machine name (case-insensitive; a unique prefix or substring works)
@@ -33,6 +33,12 @@ with warpedpinball.connect("elvira") as m:
 `connect()` raises `MachineNotFoundError` (listing the names it *did* see) or
 `AmbiguousMachineError` (listing the candidates) when a name doesn't resolve to
 exactly one board.
+
+Boards broadcast infrequently, so discovery listens for up to 20 s by default
+(`connect(..., timeout=...)` / `discover(timeout=...)` to change it). It doesn't
+usually wait that long, though: one board acts as a registry and answers with a
+*complete* list of every board it knows about, so discovery returns the instant
+that reply arrives.
 
 ## Authentication
 
