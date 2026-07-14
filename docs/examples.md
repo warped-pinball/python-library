@@ -18,28 +18,28 @@ python examples/elvira_hurryup.py
 ```
 
 The interesting part: the letter count at `0x076D` is truthful *except* while a
-hurry-up is running, when the machine preemptively sets it to 4 even though the
-letters you've earned stay lit. The tell is the **timer** (`0x0175`) — it only
-moves while a hurry-up is live. It arms at 20, sits there through a short
-intro, then ticks down once a second; when the shot is made it freezes, and
-when it's missed it reaches 0. So the script polls both bytes twice a second
-and uses the timer's *motion* to decide when to believe the letters:
+hurry-up is running, when the machine preemptively writes the 4 the player will
+drop to if they miss — even though all six letters are lit and up for grabs.
+The tell is the **timer** (`0x0175`) — it only moves while a hurry-up is live.
+It arms at 20, sits there through a short intro, then ticks down once a second;
+when the shot is made it freezes, and when it's missed it reaches 0. So the
+script polls both bytes a few times a second and uses the timer's *motion* to
+decide what to show:
 
 ```python
 grace = INTRO_GRACE if timer == 20 else FROZEN_AFTER
 hurryup_live = timer > 0 and (now - last_change) < grace
 
-if not hurryup_live:
-    lit = letters      # timer still => no hurry-up running: byte is truthful
+lit = len(WORD) if hurryup_live else letters
 ```
 
-While the timer is moving, the display keeps the last trusted letter count (so
-the word never dips to 4) and shows the countdown. Once the timer stops for
-more than `FROZEN_AFTER` (1.5 s — comfortably longer than the 1 s tick, so a
-normal countdown never looks "stopped"), whatever the machine now reports is
-shown faithfully. `INTRO_GRACE` (2.5 s) allows the extra stillness at 20 while
-the intro plays. Because the letters byte is re-read whenever no hurry-up is
-live, starting the script mid-game shows the correct letters immediately.
+While the timer is moving, all six letters light (matching the machine) and
+the countdown shows. Once the timer stops for more than `FROZEN_AFTER` (1.5 s —
+comfortably longer than the 1 s tick, so a normal countdown never looks
+"stopped"), whatever the machine now reports is shown faithfully. `INTRO_GRACE`
+(3.5 s) allows the extra stillness at 20 while the intro plays. Because the
+letters byte is re-read whenever no hurry-up is live, starting the script
+mid-game shows the correct letters immediately.
 
 One startup detail: the first read is treated as a baseline, not a change —
 otherwise a stale timer value left in memory would look "live" for the first
