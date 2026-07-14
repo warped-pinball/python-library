@@ -93,7 +93,11 @@ class HttpTransport(Transport):
             raise_for_status(resp.status_code, resp.text, auth.CHALLENGE_PATH)
             data = resp.json()
             return data["challenge"]
-        raise RateLimitedError("Device has too many outstanding auth challenges")
+        # Defensive: the loop above always returns or raises within the retry
+        # budget, so this is unreachable in practice.
+        raise RateLimitedError(  # pragma: no cover
+            "Device has too many outstanding auth challenges"
+        )
 
     def _send(
         self,

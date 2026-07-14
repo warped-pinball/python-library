@@ -120,4 +120,10 @@ pip install -e ".[dev,usb]"
 
 pytest          # run the tests
 ruff check .    # lint
+
+pytest --cov --cov-report=term-missing   # run the tests with a coverage report
 ```
+
+CI measures test coverage on every pull request and compares it against the
+base branch. Pull requests that lower total coverage are flagged: the
+`coverage` job posts a comment with the change and fails the check.

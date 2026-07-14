@@ -121,3 +121,70 @@ def test_discover_skips_non_full_frames_then_returns_on_full(monkeypatch):
     frame = full_frame(peer("10.0.0.7", "Elvira"))
     monkeypatch.setattr(discovery, "_open_socket", lambda: FakeSocket([ping, frame]))
     assert discovery.discover(timeout=999) == [DiscoveredMachine("10.0.0.7", "Elvira")]
+
+
+def test_discover_returns_early_when_named_board_appears(monkeypatch):
+    frame = full_frame(peer("10.0.0.1", "Elvira"), peer("10.0.0.2", "Pinbot"))
+    monkeypatch.setattr(discovery, "_open_socket", lambda: FakeSocket([frame]))
+    result = discovery.discover(timeout=999, name="pinbot")
+    # Returns the moment the target appears; both accumulated peers are present.
+    assert DiscoveredMachine("10.0.0.2", "Pinbot") in result
+
+
+def test_discover_times_out_with_no_replies(monkeypatch):
+    # FakeSocket with no frames always raises socket.timeout; discover should
+    # exhaust the (tiny) timeout and return whatever it has (nothing).
+    monkeypatch.setattr(discovery, "_open_socket", lambda: FakeSocket([]))
+    assert discovery.discover(timeout=0.05) == []
+
+
+def test_discover_tolerates_sendto_oserror(monkeypatch):
+    class NoRouteSocket(FakeSocket):
+        def sendto(self, *a):
+            raise OSError("no broadcast route")
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: NoRouteSocket([]))
+    # No broadcast route, no replies -> returns empty without crashing.
+    assert discovery.discover(timeout=0.05) == []
+
+
+def test_discover_breaks_on_recvfrom_oserror(monkeypatch):
+    class BrokenSocket(FakeSocket):
+        def recvfrom(self, _bufsize):
+            raise OSError("socket closed")
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: BrokenSocket([]))
+    assert discovery.discover(timeout=999) == []  # OSError breaks the loop
+
+
+def test_open_socket_binds_and_is_datagram():
+    sock = discovery._open_socket()
+    try:
+        assert sock.family == socket.AF_INET
+        assert sock.type == socket.SOCK_DGRAM
+    finally:
+        sock.close()
+
+
+def test_open_socket_falls_back_to_ephemeral_when_port_taken(monkeypatch):
+    binds = []
+
+    class FakeSock:
+        family = socket.AF_INET
+        type = socket.SOCK_DGRAM
+
+        def setsockopt(self, *a):
+            pass
+
+        def bind(self, addr):
+            binds.append(addr)
+            if addr == ("0.0.0.0", discovery.DISCOVERY_PORT):
+                raise OSError("port in use")  # first bind fails
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discovery.socket, "socket", lambda *a: FakeSock())
+    discovery._open_socket()
+    # Fell back to an ephemeral port after the fixed port was taken.
+    assert binds == [("0.0.0.0", discovery.DISCOVERY_PORT), ("0.0.0.0", 0)]
