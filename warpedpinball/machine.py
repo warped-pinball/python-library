@@ -339,6 +339,16 @@ class Machine:
 
     # -- memory ------------------------------------------------------------------------
 
+    def read(self, offset: int, count: int = 1, byteorder: str = "big") -> int:
+        """Read ``count`` bytes at ``offset`` and decode them as an unsigned int.
+
+        A convenience wrapper over :meth:`read_bytes` for the common case of
+        reading a small numeric value (a credit count, a hurry-up timer, a
+        flag). Defaults to a single byte; for a multi-byte value pass
+        ``byteorder="little"`` if the region is little-endian.
+        """
+        return int.from_bytes(self.read_bytes(offset, count), byteorder)
+
     def read_bytes(self, offset: int, count: int) -> bytes:
         """Bulk SRAM read, auto-chunked at 256 bytes per request."""
         out = bytearray()

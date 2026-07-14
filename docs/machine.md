@@ -10,7 +10,7 @@ errors you might see.
 import warpedpinball
 
 # Find every Vector board on the LAN (UDP broadcast, port 37020)
-for m in warpedpinball.discover(timeout=5):
+for m in warpedpinball.discover():
     print(m.name, m.ip)
 
 # Connect by machine name (case-insensitive; a unique prefix or substring works)
@@ -33,6 +33,12 @@ with warpedpinball.connect("elvira") as m:
 `connect()` raises `MachineNotFoundError` (listing the names it *did* see) or
 `AmbiguousMachineError` (listing the candidates) when a name doesn't resolve to
 exactly one board.
+
+Boards broadcast infrequently, so discovery listens for up to 20 s by default
+(`connect(..., timeout=...)` / `discover(timeout=...)` to change it). It doesn't
+usually wait that long, though: one board acts as a registry and answers with a
+*complete* list of every board it knows about, so discovery returns the instant
+that reply arrives.
 
 ## Authentication
 
@@ -177,7 +183,9 @@ All exceptions derive from `warpedpinball.VectorError`:
 
 | Exception | Meaning |
 | --- | --- |
-| `TransportError` | Connection, timeout, or protocol-level failure |
+| `TransportError` | Connection, timeout, or protocol-level failure (base class for the two below) |
+| `DeviceUnreachableError` | Couldn't open a connection — board powered off, wrong address, or different subnet (`.target`, `.cause`) |
+| `DeviceTimeoutError` | The board accepted the connection but didn't answer in time — busy or a flaky link (`.target`, `.timeout`, `.cause`) |
 | `MachineNotFoundError` | Discovery found no matching machine (`.seen_names` lists what it did see) |
 | `AmbiguousMachineError` | A name matched more than one machine (`.candidates`) |
 | `AuthenticationRequiredError` | Authenticated route called with no password set (raised before any traffic) |
@@ -186,3 +194,33 @@ All exceptions derive from `warpedpinball.VectorError`:
 | `CooldownError` | Route locked or in cooldown (HTTP 409/429; `.retry_after` hint in seconds) |
 | `VectorServerError` | The device handler raised an error (HTTP 5xx; `.status`) |
 | `UnsupportedFirmwareError` | The route doesn't exist on this firmware (HTTP 404); an update may be required |
+
+### Connection and timeout failures
+
+A dropped WiFi link or a busy board is the most common thing you'll hit,
+especially in a long-running poll loop. Those surface as `DeviceTimeoutError`
+(the board didn't answer in time) or `DeviceUnreachableError` (couldn't connect
+at all). Both are subclasses of `TransportError`, so a single `except
+TransportError` still catches them — but catching them by name lets you react
+differently, and their messages are already human-readable (no `urllib3`
+`HTTPConnectionPool(...)` stack to wade through):
+
+```python
+from warpedpinball import DeviceTimeoutError, DeviceUnreachableError, TransportError
+
+try:
+    credits = m.read_bytes(0x2134, 1)
+except DeviceUnreachableError:
+    print("Machine is offline — is it powered on and on the network?")
+except DeviceTimeoutError as exc:
+    print(f"{exc}")            # e.g. "The machine at 192.168.1.42 did not respond within 10s"
+```
+
+The friendly message is the exception's `str()`; the original networking error
+is kept on `.cause` if you need the low-level detail. These are raised so an
+*uncaught* one prints a single short traceback instead of the full
+requests/urllib3 chain.
+
+In a polling loop, catch the transport error, report it, and keep going rather
+than crashing on a single hiccup — see the
+[ELVIRA hurry-up example](examples.md), which does exactly that.

@@ -167,6 +167,16 @@ def test_read_bytes_single_and_range():
     assert machine.read_bytes(0x10, 4) == b"\x07\x07\x07\x07"
 
 
+def test_read_decodes_int():
+    memory = bytes(range(256))
+    machine, _ = make_machine(
+        responses={"/api/address/read": address_read_responder(memory)}
+    )
+    assert machine.read(0x05) == 5                       # single byte -> int
+    assert machine.read(0x01, 2) == 0x0102               # big-endian by default
+    assert machine.read(0x01, 2, byteorder="little") == 0x0201
+
+
 def test_memory_snapshot_joins_stream():
     machine, transport = make_machine(streams={"/api/memory-snapshot": [b"abc", b"def"]})
     assert machine.memory_snapshot() == b"abcdef"

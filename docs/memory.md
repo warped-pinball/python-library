@@ -14,8 +14,9 @@ All offsets are **relative to the start of the SRAM data region**
 You will rarely call these routes directly, because the `Machine` object provides
 wrappers at two levels of convenience:
 
-1. [`read_bytes()` / `write_bytes()`](#bulk-bytes-read_bytes--write_bytes): bulk raw bytes, auto-chunked
-2. [`memory_snapshot()` / `diff_snapshots()`](#whole-memory-snapshots): the whole SRAM at once
+1. [`read()`](#a-single-value-read): one small numeric value as an `int`
+2. [`read_bytes()` / `write_bytes()`](#bulk-bytes-read_bytes--write_bytes): bulk raw bytes, auto-chunked
+3. [`memory_snapshot()` / `diff_snapshots()`](#whole-memory-snapshots): the whole SRAM at once
 
 ## Setup
 
@@ -32,6 +33,24 @@ m = warpedpinball.connect("elvira", password="hunter2")
 Calling a read/write with no password configured raises
 `AuthenticationRequiredError` *before* any network traffic; a wrong password
 raises `AuthenticationError` when the device rejects the signature.
+
+## A single value: `read()`
+
+When you just want a number out of a known address, `read(offset, count=1)`
+reads the bytes and decodes them as an unsigned integer, so you don't have to
+index into a `bytes` object yourself:
+
+```python
+credits = m.read(0x2134)              # one byte -> int
+timer = m.read(0x0175)               # e.g. a hurry-up countdown
+
+# Multi-byte values decode big-endian by default; pass byteorder for little:
+score = m.read(0x0300, 4)             # four bytes, big-endian
+level = m.read(0x0400, 2, byteorder="little")
+```
+
+For anything larger, or when a region isn't a plain integer (packed BCD, a
+struct, a block you want to diff), reach for `read_bytes()` below.
 
 ## Bulk bytes: `read_bytes()` / `write_bytes()`
 

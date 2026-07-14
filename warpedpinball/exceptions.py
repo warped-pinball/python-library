@@ -13,6 +13,60 @@ class TransportError(VectorError):
     """A connection, timeout, or protocol-level failure talking to the device."""
 
 
+class DeviceUnreachableError(TransportError):
+    """Could not open a connection to the device.
+
+    The address refused the connection, could not be resolved, or is not on
+    the network at all (device powered off, wrong IP, different subnet). A
+    subclass of :class:`TransportError`, so ``except TransportError`` still
+    catches it. ``target`` is the host that was tried; ``cause`` is the
+    underlying networking exception, if you want the gory details.
+    """
+
+    def __init__(
+        self,
+        target: str,
+        detail: Optional[str] = None,
+        cause: Optional[BaseException] = None,
+    ):
+        self.target = target
+        self.cause = cause
+        message = (
+            f"Could not reach the machine at {target} "
+            f"(is it powered on and connected to the network?)"
+        )
+        if detail:
+            message = f"{message}: {detail}"
+        super().__init__(message)
+
+
+class DeviceTimeoutError(TransportError):
+    """The device accepted the connection but did not answer in time.
+
+    Usually the board is busy (mid-game, applying an update) or the link is
+    flaky. A subclass of :class:`TransportError`. ``target`` is the host,
+    ``timeout`` the seconds waited, and ``cause`` the underlying exception.
+    """
+
+    def __init__(
+        self,
+        target: str,
+        timeout: Optional[float] = None,
+        cause: Optional[BaseException] = None,
+    ):
+        self.target = target
+        self.timeout = timeout
+        self.cause = cause
+        if timeout is not None:
+            message = (
+                f"The machine at {target} did not respond within {timeout:g}s "
+                f"(it may be busy or the connection is unstable)"
+            )
+        else:
+            message = f"The machine at {target} did not respond in time"
+        super().__init__(message)
+
+
 class MachineNotFoundError(VectorError):
     """No machine matching the requested name was found during discovery.
 

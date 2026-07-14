@@ -10,6 +10,7 @@ a quickstart.
 | [Reading & writing memory](memory.md) | The `/api/address/read` and `/api/address/write` routes, the `read_bytes()` / `write_bytes()` wrappers, chunking, snapshots, and the CLI equivalents |
 | [HTTP API reference](http-api.md) | Request/response shapes for the address routes and how to reach any firmware route with `Machine.call()` |
 | [CLI guide](cli.md) | The `vector` command and its subcommands |
+| [Examples](examples.md) | Runnable scripts in [`examples/`](../examples), including a live animated ELVIRA hurry-up display |
 
 ## Quick orientation
 

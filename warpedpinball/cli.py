@@ -138,7 +138,7 @@ def _add_target_args(p: argparse.ArgumentParser) -> None:
         help="machine name (LAN discovery) or IP address (optional with --usb)",
     )
     p.add_argument("--password", "-p", help="device password (or $VECTOR_PASSWORD)")
-    p.add_argument("--timeout", type=float, default=5.0, help="discovery timeout (s)")
+    p.add_argument("--timeout", type=float, default=20.0, help="discovery timeout (s)")
     p.add_argument(
         "--usb",
         nargs="?",
@@ -159,7 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("discover", help="find Vector boards on the LAN")
-    p.add_argument("--timeout", type=float, default=5.0)
+    p.add_argument("--timeout", type=float, default=20.0)
     p.set_defaults(func=cmd_discover)
 
     p = sub.add_parser("status", help="show live game status")

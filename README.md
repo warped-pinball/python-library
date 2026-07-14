@@ -105,6 +105,8 @@ Full guides live in the
   the raw firmware routes
 - [CLI guide](https://github.com/warped-pinball/python-library/blob/main/docs/cli.md):
   the `vector` command
+- [Examples](https://github.com/warped-pinball/python-library/blob/main/docs/examples.md):
+  runnable scripts, including a live animated ELVIRA hurry-up display
 
 Curious about the hardware itself? Vector boards and the machines they fit are
 at [warpedpinball.com](https://warpedpinball.com).
