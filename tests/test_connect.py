@@ -69,3 +69,84 @@ def test_connect_by_name_uses_discovery(monkeypatch):
     assert m.transport.base_url == "http://10.0.0.1"
     assert m.name == "Elvira"
     m.close()
+
+
+def test_ambiguous_exact_match_raises():
+    machines = [
+        DiscoveredMachine("1.1.1.1", "Twin"),
+        DiscoveredMachine("1.1.1.2", "twin"),  # same name, different case
+    ]
+    with pytest.raises(AmbiguousMachineError) as exc_info:
+        _match_by_name("twin", machines)
+    assert len(exc_info.value.candidates) == 2
+
+
+def test_ambiguous_substring_match_raises():
+    machines = [
+        DiscoveredMachine("1.1.1.1", "The Addams Family"),
+        DiscoveredMachine("1.1.1.2", "My Family Guy"),
+    ]
+    # "family" is a substring of both but a prefix of neither.
+    with pytest.raises(AmbiguousMachineError) as exc_info:
+        _match_by_name("family", machines)
+    assert len(exc_info.value.candidates) == 2
+
+
+# -- connect_usb / list_serial_ports -----------------------------------------
+
+def test_connect_usb_auto_selects_single_port(monkeypatch):
+    import warpedpinball.transports.usb as usb_mod
+
+    captured = {}
+
+    class FakeUsbTransport:
+        def __init__(self, port, timeout=10.0):
+            captured["port"] = port
+            captured["timeout"] = timeout
+
+    monkeypatch.setattr(usb_mod, "list_serial_ports", lambda: ["/dev/ttyACM0"])
+    monkeypatch.setattr(usb_mod, "UsbTransport", FakeUsbTransport)
+    m = warpedpinball.connect_usb()
+    assert captured["port"] == "/dev/ttyACM0"
+    assert m.transport is not None
+
+
+def test_connect_usb_explicit_port(monkeypatch):
+    import warpedpinball.transports.usb as usb_mod
+
+    captured = {}
+
+    class FakeUsbTransport:
+        def __init__(self, port, timeout=10.0):
+            captured["port"] = port
+
+    monkeypatch.setattr(usb_mod, "UsbTransport", FakeUsbTransport)
+    warpedpinball.connect_usb("/dev/ttyUSB1")
+    assert captured["port"] == "/dev/ttyUSB1"
+
+
+def test_connect_usb_no_ports_raises(monkeypatch):
+    import warpedpinball.transports.usb as usb_mod
+
+    monkeypatch.setattr(usb_mod, "list_serial_ports", lambda: [])
+    with pytest.raises(MachineNotFoundError):
+        warpedpinball.connect_usb()
+
+
+def test_connect_usb_multiple_ports_raises(monkeypatch):
+    import warpedpinball.transports.usb as usb_mod
+
+    monkeypatch.setattr(
+        usb_mod, "list_serial_ports", lambda: ["/dev/ttyACM0", "/dev/ttyACM1"]
+    )
+    with pytest.raises(AmbiguousMachineError):
+        warpedpinball.connect_usb()
+
+
+def test_list_serial_ports_delegates(monkeypatch):
+    import warpedpinball.transports.usb as usb_mod
+
+    monkeypatch.setattr(
+        usb_mod, "list_serial_ports", lambda all_ports=False: ["/dev/ttyACM0"]
+    )
+    assert warpedpinball.list_serial_ports() == ["/dev/ttyACM0"]
