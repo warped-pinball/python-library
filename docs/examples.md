@@ -18,8 +18,8 @@ it counts down.
 python examples/elvira_hurryup.py
 ```
 
-It's deliberately short. Two things are worth pointing out, because they're easy
-to get wrong:
+It's deliberately short. Three things are worth pointing out, because they're
+easy to get wrong:
 
 **The timer byte is only meaningful while it's ticking.** `0x0175` counts down
 during a hurry-up, but the moment the shot is made or missed it freezes on a
@@ -30,6 +30,25 @@ timer while it's actually getting smaller:
 if 0 < timer < previous_timer:
     line += f" {timer:>3}"
 previous_timer = timer
+```
+
+**Redraw with an erase-to-end-of-line.** `"\r"` only moves the cursor back to
+the start of the line — it doesn't clear what's there. When the new line is
+*shorter* than the last (the timer just disappeared), the old digits linger. So
+each frame ends with `"\033[K"` to wipe the rest of the line:
+
+```python
+print("\r" + line + "\033[K", end="", flush=True)
+```
+
+**The letters byte dips during a hurry-up.** `0x076D` gets driven down to 4
+while a hurry-up runs (and to 0 when it ends), even though the letters you've
+already earned are still lit. Reading it literally would shrink ELVIRA to
+`ELVI`. Holding the highest count and only clearing it at 0 keeps the word
+steady:
+
+```python
+lit = 0 if letters == 0 else max(lit, letters)
 ```
 
 **A long-running loop will hit a network hiccup.** A dropped packet or a busy
