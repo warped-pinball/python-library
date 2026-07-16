@@ -12,3 +12,4 @@ coverage.json
 coverage-*.json
 coverage-comment.md
 htmlcov/
+site/

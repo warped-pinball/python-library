@@ -11,6 +11,7 @@ a quickstart.
 | [HTTP API reference](http-api.md) | Request/response shapes for the address routes and how to reach any firmware route with `Machine.call()` |
 | [CLI guide](cli.md) | The `vector` command and its subcommands |
 | [Examples](examples.md) | Runnable scripts in [`examples/`](../examples), including a live animated ELVIRA hurry-up display |
+| [API reference site](api-reference.md) | The auto-generated [pdoc](https://pdoc.dev) reference, how to build it locally, and how to enable GitHub Pages publishing |
 
 ## Quick orientation
 

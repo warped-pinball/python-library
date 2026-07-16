@@ -108,6 +108,12 @@ Full guides live in the
 - [Examples](https://github.com/warped-pinball/python-library/blob/main/docs/examples.md):
   runnable scripts, including a live animated ELVIRA hurry-up display
 
+The complete **[API reference](https://warped-pinball.github.io/python-library/)**
+is generated from the source docstrings and published to GitHub Pages on every
+push to `main`. See
+[docs/api-reference.md](https://github.com/warped-pinball/python-library/blob/main/docs/api-reference.md)
+for how it is built and how to enable Pages.
+
 Curious about the hardware itself? Vector boards and the machines they fit are
 at [warpedpinball.com](https://warpedpinball.com).
 

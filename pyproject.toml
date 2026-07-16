@@ -28,7 +28,8 @@ dependencies = ["requests>=2.25"]
 
 [project.optional-dependencies]
 usb = ["pyserial>=3.5"]
-dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.4", "pyserial>=3.5", "build"]
+docs = ["pdoc>=14"]
+dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.4", "pyserial>=3.5", "build", "pdoc>=14"]
 
 [project.urls]
 Homepage = "https://github.com/warped-pinball/python-library"
