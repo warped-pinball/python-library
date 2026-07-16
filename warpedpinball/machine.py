@@ -384,6 +384,25 @@ class Machine:
         """Full SRAM dump via the streamed ``/api/memory-snapshot`` route."""
         return b"".join(self.call_stream("/api/memory-snapshot"))
 
+    def set_memory_broadcast(self, enabled: bool, frequency_ms: int = 100) -> Any:
+        """Toggle UDP broadcasting of memory snapshots. Authenticated.
+
+        When enabled, the firmware broadcasts the whole SRAM data region as
+        UDP packets to port 2040 every ``frequency_ms`` milliseconds (each
+        packet is a 4-byte big-endian offset header followed by up to 256
+        bytes of data) -- the live stream tools like Warped Pinball's Memory
+        Mapper listen to. ``frequency_ms`` is clamped to the firmware's
+        10-60000 ms bounds and ignored when disabling.
+        """
+        if enabled:
+            frequency_ms = max(10, min(60000, int(frequency_ms)))
+            body: Dict[str, Any] = {"enable": True, "frequency_ms": frequency_ms}
+        else:
+            body = {"enable": False}
+        return self._call_gated(
+            "/api/memory/toggle-broadcast", body=body, authenticated=True
+        )
+
     @staticmethod
     def diff_snapshots(a: bytes, b: bytes) -> List[Tuple[int, int, int]]:
         """Compare two snapshots; returns ``(offset, a_value, b_value)`` per

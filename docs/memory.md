@@ -96,6 +96,26 @@ Run that a few times while changing exactly one thing on the machine; the
 offset that changes consistently is your address. (A length difference between
 snapshots shows up as changes versus `-1`.)
 
+## Live snapshot broadcasting: `set_memory_broadcast()`
+
+Instead of polling snapshots, the firmware can *push* them:
+`set_memory_broadcast(True)` makes the board broadcast the whole SRAM data
+region as UDP packets to port 2040 on the local network, over and over, until
+turned off. Each packet is a 4-byte big-endian offset header followed by up to
+256 bytes of data. This is the stream that live viewers like Warped Pinball's
+[Memory Mapper](https://github.com/warped-pinball/memory-mapper) listen to.
+
+```python
+m.set_memory_broadcast(True)                     # broadcast every 100 ms
+m.set_memory_broadcast(True, frequency_ms=500)   # or at your own rate
+...
+m.set_memory_broadcast(False)                    # stop broadcasting
+```
+
+Enabling and disabling are authenticated. `frequency_ms` is clamped to the
+firmware's 10-60000 ms bounds. Broadcasting costs the board work on every
+tick, so turn it off when you're done watching.
+
 ## Calling the routes directly
 
 If you need something the wrappers don't do, `Machine.call()` reaches the raw
