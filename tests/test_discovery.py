@@ -1,9 +1,9 @@
-"""FULL/HELLO frame encoding and tolerant decoding."""
+"""FULL/OFFLINE frame encoding and tolerant decoding."""
 
 import socket
 
 import warpedpinball.discovery as discovery
-from warpedpinball.discovery import DiscoveredMachine, build_hello, parse_full
+from warpedpinball.discovery import DiscoveredMachine, build_offline, parse_full
 
 
 def peer(ip: str, name: str) -> bytes:
@@ -58,17 +58,40 @@ def test_parse_full_bad_utf8_name_does_not_crash():
     assert machines[0].ip == "10.0.0.9"
 
 
-def test_build_hello():
-    frame = build_hello("python-client")
-    assert frame[0] == 1
-    assert frame[1] == len(b"python-client")
-    assert frame[2:] == b"python-client"
+def test_build_offline():
+    frame = build_offline("192.168.4.7")
+    assert frame[0] == 5  # MSG_OFFLINE
+    assert frame[1:] == bytes([192, 168, 4, 7])
+    assert len(frame) == 5
 
 
-def test_build_hello_truncates_to_32_bytes():
-    frame = build_hello("x" * 100)
-    assert frame[1] == 32
-    assert len(frame) == 34
+def test_local_ip_falls_back_when_no_route(monkeypatch):
+    class NoRouteSock:
+        def connect(self, *a):
+            raise OSError("network unreachable")
+
+        def getsockname(self):  # pragma: no cover - not reached on OSError
+            return ("1.2.3.4", 0)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discovery.socket, "socket", lambda *a: NoRouteSock())
+    assert discovery._local_ip() == "0.0.0.0"
+
+
+def test_discover_broadcasts_offline_frame(monkeypatch):
+    monkeypatch.setattr(discovery, "_local_ip", lambda: "192.168.4.7")
+    sent = []
+
+    class RecordingSocket(FakeSocket):
+        def sendto(self, data, addr):
+            sent.append(data)
+            super().sendto(data, addr)
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: RecordingSocket([]))
+    discovery.discover(timeout=0.05)
+    assert sent and all(f == bytes([5, 192, 168, 4, 7]) for f in sent)
 
 
 class FakeSocket:
