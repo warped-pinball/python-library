@@ -3,12 +3,22 @@
 Frame formats (first byte is the message type):
 
 - ``HELLO = 1``: ``bytes([1, name_len]) + name_bytes``; name is UTF-8, max
-  32 bytes. Clients broadcast this to ``255.255.255.255:37020``.
+  32 bytes. Boards broadcast this when they join so the registry adds them.
 - ``FULL = 2``: ``bytes([2, peer_count])`` then, per peer: 4 raw IP bytes,
   1 name-length byte, name bytes. The board with the lowest IP acts as the
-  registry and answers HELLOs with a FULL frame listing all known boards.
-- ``PING = 3`` / ``PONG = 4`` / ``OFFLINE = 5``: board-to-board liveness;
-  clients just tolerate (skip) them.
+  registry and broadcasts a FULL frame listing all known boards.
+- ``OFFLINE = 5``: ``bytes([5]) + 4 IP bytes``. Announces that the given IP
+  has left. A board hearing OFFLINE for *another* IP re-broadcasts the FULL
+  list (the registry does the actual broadcast), which is exactly the reply
+  we want.
+- ``PING = 3`` / ``PONG = 4``: board-to-board liveness; clients just tolerate
+  (skip) them.
+
+Discovery strategy: rather than sending HELLO -- which would add this client
+to the boards' peer registry (we only want *pinball machines* on that list) --
+we broadcast an OFFLINE frame naming our own IP. Declaring ourselves offline
+provokes the registry into re-broadcasting the full peer list (within ~2 s;
+boards service discovery about every 1.5 s) without ever registering us.
 """
 
 from __future__ import annotations
@@ -22,9 +32,9 @@ DISCOVERY_PORT = 37020
 BROADCAST_ADDR = "255.255.255.255"
 MSG_HELLO = 1
 MSG_FULL = 2
+MSG_OFFLINE = 5
 MAX_NAME_LEN = 32
-HELLO_INTERVAL = 2.0
-DEFAULT_CLIENT_NAME = "python-client"
+REBROADCAST_INTERVAL = 2.0
 
 
 @dataclass(frozen=True)
@@ -35,10 +45,30 @@ class DiscoveredMachine:
     name: str
 
 
-def build_hello(name: str = DEFAULT_CLIENT_NAME) -> bytes:
-    """Build a HELLO frame announcing ``name`` (UTF-8, truncated to 32 bytes)."""
-    name_bytes = name.encode("utf-8")[:MAX_NAME_LEN]
-    return bytes([MSG_HELLO, len(name_bytes)]) + name_bytes
+def _ip_to_bytes(ip: str) -> bytes:
+    return bytes(int(part) for part in ip.split("."))
+
+
+def _local_ip() -> str:
+    """Best-effort local LAN IP (the source address for LAN traffic).
+
+    Uses a connected UDP socket so no packets are actually sent; falls back to
+    ``0.0.0.0`` if the host has no route (the OFFLINE frame still provokes a
+    FULL reply, it just names a bogus IP).
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("8.8.8.8", 80))
+        return sock.getsockname()[0]
+    except OSError:
+        return "0.0.0.0"
+    finally:
+        sock.close()
+
+
+def build_offline(ip: str) -> bytes:
+    """Build an OFFLINE frame declaring ``ip`` (dotted-quad) as gone."""
+    return bytes([MSG_OFFLINE]) + _ip_to_bytes(ip)
 
 
 def parse_full(data: bytes) -> List[DiscoveredMachine]:
@@ -85,35 +115,35 @@ def _open_socket() -> socket.socket:
 def discover(
     timeout: float = 20.0,
     name: Optional[str] = None,
-    client_name: str = DEFAULT_CLIENT_NAME,
 ) -> List[DiscoveredMachine]:
-    """Broadcast HELLO and collect boards from the registry's FULL reply.
+    """Broadcast OFFLINE (self) and collect boards from the registry's FULL reply.
 
-    Boards broadcast infrequently to keep their processing light, so getting a
-    reply can take a while -- ``timeout`` (default 20 s) is how long to wait,
-    re-broadcasting HELLO every ~2 s. But a FULL frame is the registry's
-    *complete* list of known boards, so discovery returns the moment one
-    arrives rather than burning the whole timeout. ``name`` lets it also return
-    the instant that exact board appears in a reply. Results are deduplicated
-    by IP.
+    Declaring ourselves offline nudges the registry into re-broadcasting its
+    complete peer list without adding this client to it. Boards service
+    discovery infrequently, so getting a reply can take a while -- ``timeout``
+    (default 20 s) is how long to wait, re-broadcasting every ~2 s. But a FULL
+    frame is the registry's *complete* list of known boards, so discovery
+    returns the moment one arrives rather than burning the whole timeout.
+    ``name`` lets it also return the instant that exact board appears in a
+    reply. Results are deduplicated by IP.
     """
     sock = _open_socket()
-    hello = build_hello(client_name)
+    offline = build_offline(_local_ip())
     found: dict = {}  # ip -> DiscoveredMachine (dedup; registry may list itself)
     target = name.lower() if name else None
     deadline = time.monotonic() + timeout
-    next_hello = 0.0
+    next_broadcast = 0.0
     try:
         while True:
             now = time.monotonic()
             if now >= deadline:
                 break
-            if now >= next_hello:
+            if now >= next_broadcast:
                 try:
-                    sock.sendto(hello, (BROADCAST_ADDR, DISCOVERY_PORT))
+                    sock.sendto(offline, (BROADCAST_ADDR, DISCOVERY_PORT))
                 except OSError:
                     pass  # no broadcast route; FULL replies may still arrive
-                next_hello = now + HELLO_INTERVAL
+                next_broadcast = now + REBROADCAST_INTERVAL
             sock.settimeout(min(0.5, deadline - now))
             try:
                 data, _addr = sock.recvfrom(4096)
