@@ -65,6 +65,21 @@ def test_build_offline():
     assert len(frame) == 5
 
 
+def test_local_ip_falls_back_when_no_route(monkeypatch):
+    class NoRouteSock:
+        def connect(self, *a):
+            raise OSError("network unreachable")
+
+        def getsockname(self):  # pragma: no cover - not reached on OSError
+            return ("1.2.3.4", 0)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discovery.socket, "socket", lambda *a: NoRouteSock())
+    assert discovery._local_ip() == "0.0.0.0"
+
+
 def test_discover_broadcasts_offline_frame(monkeypatch):
     monkeypatch.setattr(discovery, "_local_ip", lambda: "192.168.4.7")
     sent = []
