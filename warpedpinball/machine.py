@@ -147,6 +147,7 @@ class Machine:
     # -- device info -----------------------------------------------------------
 
     def version(self) -> Any:
+        """Firmware version from ``/api/version`` (also cached for error messages)."""
         result = self.call("/api/version")
         if isinstance(result, dict):
             self._firmware_version = str(
@@ -157,21 +158,27 @@ class Machine:
         return result
 
     def machine_id(self) -> Any:
+        """Board identity from ``/api/machine_id``."""
         return self.call("/api/machine_id")
 
     def game_name(self) -> Any:
+        """Configured game/machine name from ``/api/game/name``."""
         return self.call("/api/game/name")
 
     def game_status(self) -> Any:
+        """Current gameplay status (balls, scores, active flag) from ``/api/game/status``."""
         return self.call("/api/game/status")
 
     def active_config(self) -> Any:
+        """Active machine configuration from ``/api/game/active_config``."""
         return self.call("/api/game/active_config")
 
     def wifi_status(self) -> Any:
+        """Wi-Fi connection status from ``/api/wifi/status``."""
         return self.call("/api/wifi/status")
 
     def faults(self) -> Any:
+        """Reported hardware/firmware faults from ``/api/fault``."""
         return self.call("/api/fault")
 
     def peers(self) -> Any:
@@ -206,41 +213,53 @@ class Machine:
     # -- scores / players --------------------------------------------------------
 
     def leaderboard(self) -> Any:
+        """High-score leaderboard from ``/api/leaders``."""
         return self.call("/api/leaders")
 
     def tournament(self) -> Any:
+        """Tournament standings from ``/api/tournament``."""
         return self.call("/api/tournament")
 
     def reset_leaderboard(self) -> Any:
+        """Clear the leaderboard via ``/api/leaders/reset`` (authenticated)."""
         return self._call_gated("/api/leaders/reset", authenticated=True)
 
     def reset_tournament(self) -> Any:
+        """Clear tournament standings via ``/api/tournament/reset`` (authenticated)."""
         return self._call_gated("/api/tournament/reset", authenticated=True)
 
     def claimable_scores(self) -> Any:
+        """Scores awaiting a player claim from ``/api/scores/claimable``."""
         return self.call("/api/scores/claimable")
 
     def claim_score(self, initials: str, player_index: int, score: int) -> Any:
+        """Claim a pending score for ``initials`` via ``/api/scores/claim``."""
         return self.call(
             "/api/scores/claim",
             body={"initials": initials, "player_index": player_index, "score": score},
         )
 
     def players(self) -> Any:
+        """Registered players from ``/api/players``."""
         return self.call("/api/players")
 
     def update_player(
         self, id: int, initials: str, full_name: Optional[str] = None
     ) -> Any:
+        """Create/update a player's initials (and optional full name) via
+        ``/api/player/update`` (authenticated)."""
         body: Dict[str, Any] = {"id": id, "initials": initials}
         if full_name is not None:
             body["full_name"] = full_name
         return self._call_gated("/api/player/update", body=body, authenticated=True)
 
     def export_scores(self) -> Any:
+        """Export all stored scores from ``/api/export/scores``."""
         return self.call("/api/export/scores")
 
     def import_scores(self, data: Any) -> Any:
+        """Import a previously exported score payload via ``/api/import/scores``
+        (authenticated)."""
         return self._call_gated("/api/import/scores", body=data, authenticated=True)
 
     # -- updates -----------------------------------------------------------------
@@ -318,9 +337,12 @@ class Machine:
     # -- adjustments -------------------------------------------------------------------
 
     def adjustments(self) -> Any:
+        """Saved adjustment profiles and their status from ``/api/adjustments/status``."""
         return self.call("/api/adjustments/status")
 
     def capture_adjustments(self, index: int) -> Any:
+        """Capture the machine's current adjustments into profile ``index``
+        via ``/api/adjustments/capture`` (authenticated)."""
         return self._call_gated(
             "/api/adjustments/capture", body={"index": index}, authenticated=True
         )
@@ -332,6 +354,8 @@ class Machine:
         )
 
     def name_adjustment(self, index: int, name: str) -> Any:
+        """Label adjustment profile ``index`` via ``/api/adjustments/name``
+        (authenticated)."""
         return self._call_gated(
             "/api/adjustments/name", body={"index": index, "name": name},
             authenticated=True,

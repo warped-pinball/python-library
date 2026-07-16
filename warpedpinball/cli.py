@@ -42,6 +42,7 @@ def _parse_int(text: str) -> int:
 
 
 def cmd_discover(args: argparse.Namespace) -> int:
+    """``vector discover``: list Vector boards found on the LAN."""
     machines = warpedpinball.discover(timeout=args.timeout)
     if not machines:
         print("No machines found", file=sys.stderr)
@@ -52,24 +53,28 @@ def cmd_discover(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
+    """``vector status``: print live game status as JSON."""
     with _connect(args) as m:
         _print_json(m.game_status())
     return 0
 
 
 def cmd_version(args: argparse.Namespace) -> int:
+    """``vector version``: print the board firmware version."""
     with _connect(args) as m:
         _print_json(m.version())
     return 0
 
 
 def cmd_leaders(args: argparse.Namespace) -> int:
+    """``vector leaders``: print the leaderboard as JSON."""
     with _connect(args) as m:
         _print_json(m.leaderboard())
     return 0
 
 
 def cmd_read(args: argparse.Namespace) -> int:
+    """``vector read``: read one or more SRAM bytes at an offset."""
     with _connect(args) as m:
         offset = _parse_int(args.offset)
         data = m.read_bytes(offset, args.count)
@@ -81,6 +86,7 @@ def cmd_read(args: argparse.Namespace) -> int:
 
 
 def cmd_write(args: argparse.Namespace) -> int:
+    """``vector write``: write byte value(s) to an SRAM offset."""
     with _connect(args) as m:
         offset = _parse_int(args.offset)
         values = [_parse_int(v) for v in args.values]
@@ -90,6 +96,7 @@ def cmd_write(args: argparse.Namespace) -> int:
 
 
 def cmd_snapshot(args: argparse.Namespace) -> int:
+    """``vector snapshot``: dump full SRAM to a file or stdout."""
     with _connect(args) as m:
         data = m.memory_snapshot()
     if args.output:
@@ -102,6 +109,7 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 
 
 def cmd_update(args: argparse.Namespace) -> int:
+    """``vector update``: check for and (with confirmation) apply a firmware update."""
     with _connect(args) as m:
         info = m.check_for_updates()
         _print_json(info)
@@ -150,6 +158,7 @@ def _add_target_args(p: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build and return the top-level ``vector`` argument parser."""
     parser = argparse.ArgumentParser(
         prog="vector", description="Warped Pinball Vector command-line client"
     )
@@ -201,6 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[list] = None) -> int:
+    """Console entry point: parse ``argv`` and dispatch to the chosen subcommand."""
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)

@@ -27,6 +27,8 @@ def _pick(raw: Any, *keys: str) -> Any:
 
 @dataclass
 class Score:
+    """A single leaderboard/tournament score. See :meth:`from_raw`."""
+
     initials: Optional[str] = None
     full_name: Optional[str] = None
     score: Optional[int] = None
@@ -36,6 +38,7 @@ class Score:
 
     @classmethod
     def from_raw(cls, raw: Any) -> "Score":
+        """Build a :class:`Score` from one raw device payload entry."""
         return cls(
             initials=_pick(raw, "initials"),
             full_name=_pick(raw, "full_name", "fullname", "name"),
@@ -48,6 +51,8 @@ class Score:
 
 @dataclass
 class Player:
+    """A registered player record. See :meth:`from_raw`."""
+
     id: Optional[int] = None
     initials: Optional[str] = None
     full_name: Optional[str] = None
@@ -55,6 +60,10 @@ class Player:
 
     @classmethod
     def from_raw(cls, raw: Any, id: Optional[int] = None) -> "Player":
+        """Build a :class:`Player` from one raw device payload entry.
+
+        ``id`` is used as a fallback when the payload carries no id/index field.
+        """
         return cls(
             id=_pick(raw, "id", "index") if _pick(raw, "id", "index") is not None else id,
             initials=_pick(raw, "initials"),
@@ -65,6 +74,8 @@ class Player:
 
 @dataclass
 class GameStatus:
+    """A snapshot of live gameplay state. See :meth:`from_raw`."""
+
     game_active: Optional[bool] = None
     ball_in_play: Optional[int] = None
     scores: Any = None
@@ -72,6 +83,7 @@ class GameStatus:
 
     @classmethod
     def from_raw(cls, raw: Any) -> "GameStatus":
+        """Build a :class:`GameStatus` from a ``/api/game/status`` payload."""
         return cls(
             game_active=_pick(raw, "game_active", "gameactive", "in_game", "active"),
             ball_in_play=_pick(raw, "ball_in_play", "ballinplay", "ball"),
@@ -82,6 +94,8 @@ class GameStatus:
 
 @dataclass
 class UpdateInfo:
+    """Firmware update availability. See :meth:`from_raw`."""
+
     current_version: Optional[str] = None
     available_version: Optional[str] = None
     url: Optional[str] = None
@@ -90,6 +104,7 @@ class UpdateInfo:
 
     @classmethod
     def from_raw(cls, raw: Any) -> "UpdateInfo":
+        """Build an :class:`UpdateInfo` from a ``/api/update/check`` payload."""
         return cls(
             current_version=_pick(raw, "current_version", "current", "version"),
             available_version=_pick(raw, "available_version", "latest", "new_version"),
