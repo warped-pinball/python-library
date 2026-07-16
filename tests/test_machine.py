@@ -49,6 +49,11 @@ WRAPPER_CASES = [
     (lambda m: m.name_adjustment(1, "comp"), "/api/adjustments/name", True),
     (lambda m: m.peers(), "/api/network/peers", False),
     (lambda m: m.set_date(datetime.datetime(2026, 7, 13)), "/api/set_date", True),
+    (
+        lambda m: m.set_memory_broadcast(True),
+        "/api/memory/toggle-broadcast",
+        True,
+    ),
 ]
 
 
@@ -175,6 +180,22 @@ def test_read_decodes_int():
     assert machine.read(0x05) == 5                       # single byte -> int
     assert machine.read(0x01, 2) == 0x0102               # big-endian by default
     assert machine.read(0x01, 2, byteorder="little") == 0x0201
+
+
+def test_set_memory_broadcast_bodies():
+    machine, transport = make_machine()
+    machine.set_memory_broadcast(True, frequency_ms=250)
+    machine.set_memory_broadcast(True, frequency_ms=1)  # below the firmware minimum
+    machine.set_memory_broadcast(True, frequency_ms=10**6)  # above the maximum
+    machine.set_memory_broadcast(True, ip="192.168.1.20")  # explicit target
+    machine.set_memory_broadcast(False)
+    assert [body for _, body, _ in transport.calls] == [
+        {"enable": True, "frequency_ms": 250},
+        {"enable": True, "frequency_ms": 10},
+        {"enable": True, "frequency_ms": 60000},
+        {"enable": True, "frequency_ms": 100, "ip": "192.168.1.20"},
+        {"enable": False},
+    ]
 
 
 def test_memory_snapshot_joins_stream():

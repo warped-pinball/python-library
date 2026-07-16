@@ -384,6 +384,37 @@ class Machine:
         """Full SRAM dump via the streamed ``/api/memory-snapshot`` route."""
         return b"".join(self.call_stream("/api/memory-snapshot"))
 
+    def set_memory_broadcast(
+        self, enabled: bool, frequency_ms: int = 100, ip: Optional[str] = None
+    ) -> Any:
+        """Toggle UDP streaming of memory snapshots to one client. Authenticated.
+
+        When enabled, the firmware sends the whole SRAM data region as UDP
+        packets to port 2040 on a single target IP every ``frequency_ms``
+        milliseconds (each packet is a 4-byte big-endian offset header
+        followed by up to 256 bytes of data) -- the live stream tools like
+        Warped Pinball's Memory Mapper listen to. The stream goes only to
+        that one address, never to the whole network, and the board keeps at
+        most one stream target at a time.
+
+        ``ip`` is the IPv4 address to stream to; when omitted the firmware
+        streams back to the requester (this machine), which is what you want
+        when the listener runs where this code runs. Over USB there is no
+        requester IP, so pass ``ip`` explicitly. ``frequency_ms`` is clamped
+        to the firmware's 10-60000 ms bounds; both extras are ignored when
+        disabling.
+        """
+        if enabled:
+            frequency_ms = max(10, min(60000, int(frequency_ms)))
+            body: Dict[str, Any] = {"enable": True, "frequency_ms": frequency_ms}
+            if ip is not None:
+                body["ip"] = ip
+        else:
+            body = {"enable": False}
+        return self._call_gated(
+            "/api/memory/toggle-broadcast", body=body, authenticated=True
+        )
+
     @staticmethod
     def diff_snapshots(a: bytes, b: bytes) -> List[Tuple[int, int, int]]:
         """Compare two snapshots; returns ``(offset, a_value, b_value)`` per
