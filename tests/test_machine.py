@@ -187,11 +187,13 @@ def test_set_memory_broadcast_bodies():
     machine.set_memory_broadcast(True, frequency_ms=250)
     machine.set_memory_broadcast(True, frequency_ms=1)  # below the firmware minimum
     machine.set_memory_broadcast(True, frequency_ms=10**6)  # above the maximum
+    machine.set_memory_broadcast(True, ip="192.168.1.20")  # explicit target
     machine.set_memory_broadcast(False)
     assert [body for _, body, _ in transport.calls] == [
         {"enable": True, "frequency_ms": 250},
         {"enable": True, "frequency_ms": 10},
         {"enable": True, "frequency_ms": 60000},
+        {"enable": True, "frequency_ms": 100, "ip": "192.168.1.20"},
         {"enable": False},
     ]
 
