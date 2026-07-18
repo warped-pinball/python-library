@@ -20,6 +20,17 @@ from ..exceptions import (
 from . import Transport, parse_body, raise_for_status, serialize_body
 
 DEFAULT_TIMEOUT = 10.0
+
+
+def _is_lan_address(host: str) -> bool:
+    """True for private/link-local/loopback IPs (boards always live on these)."""
+    import ipaddress
+
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False  # a hostname; leave proxy behavior alone
+    return ip.is_private or ip.is_link_local or ip.is_loopback
 #: Retries when the device says "429 Too many challenges" (expired challenges
 #: are purged on each challenge request, so a short sleep usually clears it).
 CHALLENGE_RETRIES = 3
@@ -46,7 +57,15 @@ class HttpTransport(Transport):
         self._host_label = urlsplit(self.base_url).netloc or self.base_url
         self.password = password
         self.timeout = timeout
-        self._session = session or requests.Session()
+        if session is None:
+            session = requests.Session()
+            if _is_lan_address(urlsplit(self.base_url).hostname or ""):
+                # Never route LAN traffic through a system/environment proxy.
+                # Windows machines often have one configured (corporate, VPN,
+                # WPAD auto-detect), and requests would otherwise send this
+                # board's traffic to a proxy that cannot reach it.
+                session.trust_env = False
+        self._session = session
 
     @property
     def description(self) -> str:

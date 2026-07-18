@@ -286,6 +286,26 @@ def test_discover_tolerates_sendto_oserror(monkeypatch):
     assert discovery.discover(timeout=0.05) == []
 
 
+def test_discover_survives_windows_connection_reset(monkeypatch):
+    # Windows raises ConnectionResetError from recvfrom when an earlier *sent*
+    # datagram bounced (WSAECONNRESET). That must not end discovery -- the
+    # FULL frame queued behind it must still be received.
+    class WindowsySocket(FakeSocket):
+        def __init__(self, frames):
+            super().__init__(frames)
+            self._reset_once = True
+
+        def recvfrom(self, bufsize):
+            if self._reset_once:
+                self._reset_once = False
+                raise ConnectionResetError("bounced datagram")
+            return super().recvfrom(bufsize)
+
+    frame = full_frame(peer("10.0.0.7", "Elvira"))
+    monkeypatch.setattr(discovery, "_open_socket", lambda: WindowsySocket([frame]))
+    assert discovery.discover(timeout=999) == [DiscoveredMachine("10.0.0.7", "Elvira")]
+
+
 def test_discover_breaks_on_recvfrom_oserror(monkeypatch):
     class BrokenSocket(FakeSocket):
         def recvfrom(self, _bufsize):

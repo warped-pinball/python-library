@@ -286,6 +286,11 @@ def discover(
                 data, addr = sock.recvfrom(4096)
             except socket.timeout:
                 continue
+            except ConnectionResetError:
+                # Windows only: a previously *sent* datagram bounced with ICMP
+                # port-unreachable, and Windows reports it on the next receive
+                # (WSAECONNRESET). Not a socket failure; keep listening.
+                continue
             except OSError:
                 break
 
