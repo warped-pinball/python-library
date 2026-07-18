@@ -16,6 +16,23 @@ jobs:
       - name: Verify pyproject.toml and package version agree
         run: python scripts/check_version.py
 
+  version-bump:
+    # Every pull request must raise __version__ above the base branch, so no
+    # change merges without a version bump and main is always publishable.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Ensure the version was bumped
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+          python scripts/check_version_bump.py --base-ref "${{ github.event.pull_request.base.sha }}"
+
   lint:
     runs-on: ubuntu-latest
     steps:
