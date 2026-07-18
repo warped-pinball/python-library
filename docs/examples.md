@@ -5,7 +5,73 @@ small, self-contained file you can copy, run, and tweak.
 
 | Example | What it shows |
 | --- | --- |
+| [`discover_boards.py`](../examples/discover_boards.py) | Finding every board on the LAN (with an IP fallback for networks that block broadcast), then connecting to each to print its IP, name, firmware, and game state |
 | [`elvira_hurryup.py`](../examples/elvira_hurryup.py) | Polling an SRAM byte in a loop and inferring game state to draw a live ELVIRA hurry-up display |
+
+## Discover boards on the network
+
+[`examples/discover_boards.py`](../examples/discover_boards.py) lists every
+Vector board on your LAN and prints what each one is.
+
+```bash
+python examples/discover_boards.py
+```
+
+`warpedpinball.discover()` broadcasts on the network and returns a
+`DiscoveredMachine` (an `ip` and a `name`) for every board that answers — no
+password and no per-board request, so it works even on a busy network. That
+inventory prints first:
+
+```python
+boards = warpedpinball.discover(timeout=DISCOVERY_TIMEOUT)
+for board in sorted(boards, key=lambda b: b.name.lower()):
+    print(f"{board.name}  {board.ip}")
+```
+
+To show more than name and IP, the script then connects to each board by IP and
+asks it a few read-only questions — `version()`, `game_name()`, and
+`game_status()` — none of which need a password. Boards are contacted
+concurrently with a `ThreadPoolExecutor` so one slow board doesn't hold up the
+rest, and any board that fails to answer (mid-reboot, briefly unreachable) is
+reported inline instead of aborting the whole run:
+
+```python
+try:
+    with warpedpinball.connect(board.ip) as m:
+        facts["firmware"] = _version_string(m.version())
+        facts["game"] = _scalar(m.game_name())
+        ...
+except (TransportError, VectorError, OSError) as error:
+    facts["error"] = str(error)
+```
+
+Connecting by IP (rather than by name) skips a second discovery round-trip —
+you already have the address from the first broadcast. See
+[connecting](machine.md) and the
+[error handling](machine.md#connection-and-timeout-failures) reference for the
+`TransportError` / `VectorError` families.
+
+### When broadcast finds nothing
+
+Some networks — phone hotspots, guest Wi-Fi, and some travel routers — isolate
+clients and silently drop the broadcast traffic that `discover()` relies on. The
+boards are still reachable by unicast HTTP; only the broadcast is blocked. So
+when the broadcast turns up empty, the script asks for one board's IP and
+enumerates the rest from that board's own peer table over HTTP — no broadcast
+involved:
+
+```python
+found = warpedpinball.discover(timeout=DISCOVERY_TIMEOUT)
+if not found:
+    ip = input("Enter a board's IP address (blank to give up): ").strip()
+    with warpedpinball.connect(ip) as m:
+        peers = m.peers()   # GET /api/network/peers
+```
+
+`peers()` returns the board's view of every board it knows about, so one known
+IP is enough to list the whole network. The script parses that payload
+defensively (the exact JSON shape can vary by firmware) and always includes the
+IP you supplied, so it works even if the peer table comes back empty.
 
 ## ELVIRA hurry-up display
 

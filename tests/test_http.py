@@ -300,3 +300,21 @@ def test_stream_iter_content_error_is_typed():
     stream = make_transport(session).stream("/api/memory-snapshot")
     with pytest.raises(DeviceUnreachableError):
         list(stream)
+
+
+def test_lan_addresses_bypass_system_proxies():
+    # Boards live on private IPs; a configured system/env proxy (common on
+    # Windows: corporate, VPN, WPAD) cannot reach them, so the session must
+    # not consult proxy settings for LAN hosts.
+    for host in ("192.168.4.7", "10.0.0.9", "172.16.1.2", "127.0.0.1", "169.254.3.4"):
+        assert HttpTransport(host)._session.trust_env is False, host
+
+
+def test_hostnames_and_public_ips_keep_proxy_behavior():
+    for host in ("example.com", "8.8.8.8"):
+        assert HttpTransport(host)._session.trust_env is True, host
+
+
+def test_caller_supplied_session_is_left_alone():
+    session = requests.Session()
+    assert HttpTransport("192.168.4.7", session=session)._session.trust_env is True
