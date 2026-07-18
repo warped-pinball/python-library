@@ -129,7 +129,9 @@ class HttpTransport(Transport):
         if body_str is not None:
             headers["Content-Type"] = "application/json"
         if authenticated:
-            if not self.password:
+            # An empty string is a valid (empty) password and is signed as
+            # such; only ``None`` means no password has been set.
+            if self.password is None:
                 raise AuthenticationRequiredError(
                     f"Route {path!r} requires authentication but no password is set"
                 )

@@ -77,6 +77,23 @@ def test_no_password_raises_before_any_request():
     assert session.get_calls == []  # not even a challenge fetch
 
 
+def test_empty_password_is_valid_and_signs():
+    # A board with no password configured signs with an empty HMAC key; an
+    # empty string is a real password, not "no password".
+    session = FakeSession(challenge=CHALLENGE)
+    t = make_transport(session, password="")
+    body = {"id": 0}
+    t.request("/api/player/update", body=body, authenticated=True)
+
+    assert session.get_calls == ["http://192.168.1.42" + auth.CHALLENGE_PATH]
+    req = session.requests[0]
+    body_str = json.dumps(body, separators=(",", ":"))
+    assert req["headers"][auth.CHALLENGE_HEADER] == CHALLENGE
+    assert req["headers"][auth.HMAC_HEADER] == auth.sign(
+        "", CHALLENGE, "/api/player/update", body_str
+    )
+
+
 def test_expired_challenge_retried_once_with_fresh_challenge():
     session = FakeSession()
     session.next_challenges = ["11" * 32, "22" * 32]

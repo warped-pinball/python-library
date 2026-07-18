@@ -83,8 +83,16 @@ class Machine:
 
     @property
     def password(self) -> Optional[str]:
-        """Password for HMAC auth; falls back to $VECTOR_PASSWORD."""
-        return self._password or os.environ.get(PASSWORD_ENV_VAR)
+        """Password for HMAC auth; falls back to $VECTOR_PASSWORD.
+
+        An empty string is a valid password (some boards have no password
+        configured, which the firmware signs with an empty HMAC key) and is
+        kept distinct from ``None``, which means no password has been set and
+        triggers the ``$VECTOR_PASSWORD`` fallback.
+        """
+        if self._password is not None:
+            return self._password
+        return os.environ.get(PASSWORD_ENV_VAR)
 
     @password.setter
     def password(self, value: Optional[str]) -> None:
@@ -136,7 +144,7 @@ class Machine:
         if (
             authenticated
             and self.transport.requires_password
-            and not self.password
+            and self.password is None
         ):
             raise AuthenticationRequiredError(
                 f"Route {path!r} requires authentication but no password is set; "

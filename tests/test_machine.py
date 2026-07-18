@@ -107,6 +107,23 @@ def test_no_preflight_error_when_transport_needs_no_password():
     assert transport.calls == [("/api/settings/reboot", None, True)]
 
 
+def test_empty_password_passes_preflight():
+    # An empty string is a valid (empty) password, so authenticated routes work
+    # rather than raising AuthenticationRequiredError.
+    machine, transport = make_machine(password="")
+    machine.reboot()
+    assert transport.calls == [("/api/settings/reboot", None, True)]
+    assert transport.password == ""
+
+
+def test_empty_password_not_overridden_by_env(monkeypatch):
+    # An explicit empty password wins over $VECTOR_PASSWORD; only an unset
+    # (None) password falls back to the environment.
+    monkeypatch.setenv("VECTOR_PASSWORD", "from-env")
+    machine, _ = make_machine(password="")
+    assert machine.password == ""
+
+
 def test_env_var_password_fallback(monkeypatch):
     monkeypatch.setenv("VECTOR_PASSWORD", "from-env")
     machine, transport = make_machine(password=None)
