@@ -55,7 +55,8 @@ def find_boards():
     print(f"Listening for boards (up to {DISCOVERY_TIMEOUT:.0f}s)...")
     found = warpedpinball.discover(timeout=DISCOVERY_TIMEOUT)
     if found:
-        return [(b.name, b.ip) for b in found]
+        # A board heard only indirectly can come back nameless; show its IP.
+        return [(b.name or b.ip, b.ip) for b in found]
 
     # Broadcast turned up nothing. On networks that block broadcast (hotspots,
     # some travel routers) the boards are still reachable by IP, so ask for one

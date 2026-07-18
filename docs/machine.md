@@ -34,11 +34,16 @@ with warpedpinball.connect("elvira") as m:
 `AmbiguousMachineError` (listing the candidates) when a name doesn't resolve to
 exactly one board.
 
-Boards broadcast infrequently, so discovery listens for up to 20 s by default
-(`connect(..., timeout=...)` / `discover(timeout=...)` to change it). It doesn't
-usually wait that long, though: one board acts as a registry and answers with a
-*complete* list of every board it knows about, so discovery returns the instant
-that reply arrives.
+Boards service discovery every 1.5 s, so results usually arrive within about
+two seconds; the default 20 s cap (`connect(..., timeout=...)` /
+`discover(timeout=...)` to change it) only matters on a genuinely quiet
+network. Discovery probes every interface — the limited broadcast *and* each
+subnet's directed broadcast, so multi-homed machines reach the right network —
+and returns the instant one board answers with its *complete* list of every
+board it knows about. Boards also answer probes with a unicast reply, so even
+on networks that filter broadcasts toward your machine (some hotspots and
+travel routers), discovery hears the board and fetches the full list from it
+over plain HTTP instead.
 
 ## Authentication
 
