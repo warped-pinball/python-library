@@ -32,7 +32,7 @@ from .exceptions import (
 from .machine import GameEvent, Machine
 from .transports.http import HttpTransport
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 __all__ = [
     "connect",
