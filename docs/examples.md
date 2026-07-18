@@ -5,7 +5,51 @@ small, self-contained file you can copy, run, and tweak.
 
 | Example | What it shows |
 | --- | --- |
+| [`discover_boards.py`](../examples/discover_boards.py) | Finding every board on the LAN, then connecting to each to print its IP, name, firmware, and game state |
 | [`elvira_hurryup.py`](../examples/elvira_hurryup.py) | Polling an SRAM byte in a loop and inferring game state to draw a live ELVIRA hurry-up display |
+
+## Discover boards on the network
+
+[`examples/discover_boards.py`](../examples/discover_boards.py) lists every
+Vector board on your LAN and prints what each one is.
+
+```bash
+python examples/discover_boards.py
+```
+
+`warpedpinball.discover()` broadcasts on the network and returns a
+`DiscoveredMachine` (an `ip` and a `name`) for every board that answers — no
+password and no per-board request, so it works even on a busy network. That
+inventory prints first:
+
+```python
+boards = warpedpinball.discover(timeout=DISCOVERY_TIMEOUT)
+for board in sorted(boards, key=lambda b: b.name.lower()):
+    print(f"{board.name}  {board.ip}")
+```
+
+To show more than name and IP, the script then connects to each board by IP and
+asks it a few read-only questions — `version()`, `game_name()`, and
+`game_status()` — none of which need a password. Boards are contacted
+concurrently with a `ThreadPoolExecutor` so one slow board doesn't hold up the
+rest, and any board that fails to answer (mid-reboot, briefly unreachable) is
+reported inline instead of aborting the whole run:
+
+```python
+try:
+    with warpedpinball.connect(board.ip) as m:
+        facts["firmware"] = _version_string(m.version())
+        facts["game"] = _scalar(m.game_name())
+        ...
+except (TransportError, VectorError, OSError) as error:
+    facts["error"] = str(error)
+```
+
+Connecting by IP (rather than by name) skips a second discovery round-trip —
+you already have the address from the first broadcast. See
+[connecting](machine.md) and the
+[error handling](machine.md#connection-and-timeout-failures) reference for the
+`TransportError` / `VectorError` families.
 
 ## ELVIRA hurry-up display
 
