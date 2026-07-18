@@ -13,6 +13,9 @@ from warpedpinball.discovery import (
     parse_hello,
 )
 
+# The real function, captured before the autouse fixture below patches it.
+_real_local_ips = discovery._local_ips
+
 
 @pytest.fixture(autouse=True)
 def _hermetic(monkeypatch):
@@ -106,6 +109,32 @@ def test_directed_broadcasts():
     assert discovery._directed_broadcasts(["192.168.8.7", "192.168.8.9"]) == [
         "192.168.8.255"
     ]
+
+
+def test_local_ips_merges_interfaces_and_filters(monkeypatch):
+    # getaddrinfo lists per-interface IPs; the default-route IP is merged in,
+    # loopback is dropped, and the result is sorted and de-duplicated.
+    infos = [
+        (socket.AF_INET, socket.SOCK_DGRAM, 17, "", ("192.168.8.7", 0)),
+        (socket.AF_INET, socket.SOCK_DGRAM, 17, "", ("127.0.1.1", 0)),
+        (socket.AF_INET, socket.SOCK_DGRAM, 17, "", ("10.0.0.3", 0)),
+    ]
+    monkeypatch.setattr(discovery.socket, "getaddrinfo", lambda *a, **k: infos)
+    monkeypatch.setattr(discovery, "_local_ip", lambda: "192.168.8.7")
+    assert _real_local_ips() == ["10.0.0.3", "192.168.8.7"]
+
+
+def test_local_ips_tolerates_getaddrinfo_failure(monkeypatch):
+    # Odd hosts can't resolve their own hostname; the default-route IP still
+    # comes back, and a routeless 0.0.0.0 fallback is not treated as an IP.
+    def boom(*a, **k):
+        raise OSError("resolution failed")
+
+    monkeypatch.setattr(discovery.socket, "getaddrinfo", boom)
+    monkeypatch.setattr(discovery, "_local_ip", lambda: "192.168.8.7")
+    assert _real_local_ips() == ["192.168.8.7"]
+    monkeypatch.setattr(discovery, "_local_ip", lambda: "0.0.0.0")
+    assert _real_local_ips() == []
 
 
 def test_local_ip_falls_back_when_no_route(monkeypatch):
@@ -347,6 +376,63 @@ def test_open_socket_binds_and_is_datagram():
         assert sock.type == socket.SOCK_DGRAM
     finally:
         sock.close()
+
+
+def test_probe_sockets_binds_local_ips():
+    socks = discovery._probe_sockets(["127.0.0.1"])
+    try:
+        assert len(socks) == 1
+        assert socks[0].getsockname()[0] == "127.0.0.1"
+    finally:
+        for s in socks:
+            s.close()
+
+
+def test_discover_uses_and_closes_probe_sockets(monkeypatch):
+    # Per-interface probe sockets must carry probes and be closed on exit.
+    monkeypatch.setattr(discovery, "_local_ip", lambda: "192.168.4.7")
+    monkeypatch.setattr(discovery, "_local_ips", lambda: ["192.168.4.7"])
+    probe_sock = FakeSocket([])
+    probe_sock.closed = False
+    probe_sock.close = lambda: setattr(probe_sock, "closed", True)
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [probe_sock])
+    monkeypatch.setattr(discovery, "_open_socket", lambda: FakeSocket([]))
+    discovery.discover(timeout=0.05)
+    assert probe_sock.sent > 0
+    assert probe_sock.closed
+
+
+def test_discover_second_sighting_keeps_first_settle_clock(monkeypatch):
+    # Two boards heard directly (PONGs from different IPs): both must come
+    # back, and the settle window runs from the *first* sighting.
+    monkeypatch.setattr(
+        discovery,
+        "_open_socket",
+        lambda: FakeSocket([(bytes([4]), "10.0.0.9"), (bytes([4]), "10.0.0.4")]),
+    )
+    monkeypatch.setattr(discovery, "_peers_over_http", lambda ip: [])
+    machines = discovery.discover(timeout=999)
+    assert set(machines) == {
+        DiscoveredMachine("10.0.0.9", ""),
+        DiscoveredMachine("10.0.0.4", ""),
+    }
+
+
+def test_peers_over_http_tolerates_non_dict_payload(monkeypatch):
+    class FakeTransport:
+        def __init__(self, host, timeout=None):
+            pass
+
+        def request(self, path):
+            return ["not", "a", "peer", "map"]
+
+        def close(self):
+            pass
+
+    import warpedpinball.transports.http as http
+
+    monkeypatch.setattr(http, "HttpTransport", FakeTransport)
+    assert discovery._peers_over_http("10.0.0.9") == []
 
 
 def test_probe_sockets_skips_unbindable_ips():
