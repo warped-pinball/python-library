@@ -82,14 +82,16 @@ then updates them all at the same time — each board gets its own line with a
 progress bar that fills as its update streams.
 
 ```bash
-VECTOR_PASSWORD=secret python examples/update_all_boards.py
+python examples/update_all_boards.py
 ```
 
 Checking is read-only and needs no password; each board's
 `check_for_updates()` (`/api/update/check`, which has a 10 s server-side
 cooldown) is called concurrently, and "the payload contains a `url`" is
 treated as the signal that an update exists. Applying is the authenticated
-part: `apply_update()` streams `{"log": ..., "percent": ...}` records as the
+part: the script uses `$VECTOR_PASSWORD` when set and otherwise prompts for
+the shared board password (via `getpass`) after you confirm. Then
+`apply_update()` streams `{"log": ..., "percent": ...}` records as the
 board downloads and flashes, and the script feeds each record's `percent`
 into a shared display:
 

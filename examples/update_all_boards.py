@@ -13,13 +13,15 @@ The flow is three phases:
    as the board downloads and flashes, so each board gets its own line with a
    progress bar that fills in as its update runs.
 
-Applying an update is an authenticated route: set each board's password via
-the $VECTOR_PASSWORD environment variable (all boards must share it for this
-script), or edit connect() below.
+Applying an update is an authenticated route: the script uses $VECTOR_PASSWORD
+if set, and otherwise prompts for the password before updating (all boards
+must share it for this script).
 
-    VECTOR_PASSWORD=secret python examples/update_all_boards.py
+    python examples/update_all_boards.py
 """
 
+import getpass
+import os
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -84,8 +86,11 @@ class ProgressBoard:
         self.drawn = True
 
 
-def update_board(board, progress):
-    """Run one board's update, feeding its streamed percent into the display."""
+def update_board(board, password, progress):
+    """Run one board's update, feeding its streamed percent into the display.
+
+    Returns True on success.
+    """
     name, ip, url, _ = board
 
     def on_record(record):
@@ -98,12 +103,14 @@ def update_board(board, progress):
         )
 
     try:
-        with warpedpinball.connect(ip) as m:
+        with warpedpinball.connect(ip, password=password) as m:
             progress.update(name, status="updating")
             m.apply_update(url=url, progress=on_record)
             progress.update(name, percent=100, status="done")
+            return True
     except (TransportError, VectorError, OSError) as error:
         progress.update(name, status=f"FAILED: {error}")
+        return False
 
 
 def main():
@@ -137,14 +144,24 @@ def main():
         print("Aborted; no boards were touched.")
         return
 
+    # Applying an update is authenticated; get a password before starting.
+    password = os.environ.get("VECTOR_PASSWORD") or getpass.getpass(
+        "Board password (same for all boards): "
+    )
+
     print()
     progress = ProgressBoard([b[0] for b in updatable])
     progress.update(updatable[0][0])  # draw the initial table
     with ThreadPoolExecutor(max_workers=len(updatable)) as pool:
-        for board in updatable:
-            pool.submit(update_board, board, progress)
+        results = list(
+            pool.map(lambda b: update_board(b, password, progress), updatable)
+        )
 
-    print("\nAll done. Boards reboot themselves to finish applying an update.")
+    failed = results.count(False)
+    if failed:
+        print(f"\n{failed} of {len(results)} update(s) failed -- see above.")
+    else:
+        print("\nAll updates applied. Boards reboot themselves to finish.")
 
 
 if __name__ == "__main__":
