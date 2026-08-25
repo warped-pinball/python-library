@@ -116,9 +116,40 @@ m.wait_until_reachable(timeout=120)
 Other wrappers include `machine_id()`, `game_name()`, `active_config()`,
 `wifi_status()`, `faults()`, `peers()`, `tournament()`,
 `claimable_scores()` / `claim_score()`, `export_scores()` / `import_scores()`,
-`reset_leaderboard()` / `reset_tournament()`, `date()` / `set_date()`, and the
+`reset_leaderboard()` / `reset_tournament()`, `date()` / `set_date()`, the
+formats family (`formats()`, `active_format()`, `set_format()`), and the
 adjustments family (`adjustments()`, `capture_adjustments()`,
 `restore_adjustments()`, `name_adjustment()`).
+
+## Live game events over UDP
+
+`watch_game()` polls, which is fine for one machine and wasteful for twenty.
+A board can instead *push* its game events to you, as signed UDP datagrams on
+port 6809 -- what Origin uses to follow a room full of machines at once.
+
+Register yourself as the board's target, and it sends only to you:
+
+```python
+from warpedpinball import origin
+
+secret = origin.new_secret()
+m.set_origin_target(secret)          # board sends to wherever this call came from
+m.set_origin_target(secret, ip="192.168.1.5")   # ...or to somewhere else
+
+# Then, on a socket bound to port 6809:
+event = origin.unpack(secret, datagram)   # raises OriginAuthError if not ours
+print(event["type"], event["data"])
+
+m.clear_origin_target()              # stop the stream
+```
+
+A board with no registered target sends nothing at all, and a board with one
+never broadcasts -- one address, one listener. Every datagram is signed with
+the secret and carries a counter `n` that increases with each send, so drop
+anything whose `n` is not greater than the last you accepted from that board.
+Re-registering rotates the secret and resets the counter, so a listener that
+restarts just registers again. See
+[`warpedpinball.origin`](api-reference.md) for the frame layout.
 
 ## The raw escape hatch
 

@@ -54,6 +54,11 @@ WRAPPER_CASES = [
         "/api/memory/toggle-broadcast",
         True,
     ),
+    (lambda m: m.formats(), "/api/formats/available", False),
+    (lambda m: m.active_format(), "/api/formats/active", False),
+    (lambda m: m.set_format(2), "/api/formats/set", True),
+    (lambda m: m.set_origin_target("abc"), "/api/origin/target", True),
+    (lambda m: m.clear_origin_target(), "/api/origin/target", True),
 ]
 
 
@@ -197,6 +202,28 @@ def test_read_decodes_int():
     assert machine.read(0x05) == 5                       # single byte -> int
     assert machine.read(0x01, 2) == 0x0102               # big-endian by default
     assert machine.read(0x01, 2, byteorder="little") == 0x0201
+
+
+def test_set_format_bodies():
+    machine, transport = make_machine()
+    machine.set_format(2)
+    machine.set_format(2, {"GetPlayerID": {"Value": True}})
+    bodies = [body for _, body, _ in transport.calls]
+    assert bodies[0] == {"format_id": 2}
+    # The firmware reads the options block capitalized.
+    assert bodies[1]["Options"] == {"GetPlayerID": {"Value": True}}
+
+
+def test_origin_target_bodies():
+    machine, transport = make_machine()
+    machine.set_origin_target("s3cret")
+    machine.set_origin_target("s3cret", ip="192.168.1.20")
+    machine.clear_origin_target()
+    bodies = [body for _, body, _ in transport.calls]
+    # No ip means "wherever this request came from" -- the board fills it in.
+    assert bodies[0] == {"enable": True, "secret": "s3cret"}
+    assert bodies[1]["ip"] == "192.168.1.20"
+    assert bodies[2] == {"enable": False}
 
 
 def test_set_memory_broadcast_bodies():
