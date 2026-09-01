@@ -16,6 +16,8 @@ The library finds boards on your network by name, handles authentication for
 you, and works the same whether you connect over WiFi or plug in with a USB
 cable. You write `m.leaderboard()`; it takes care of the rest.
 
+[Documentation Site](https://warped-pinball.github.io/python-library/warpedpinball.html)
+
 ## Install
 
 Requires Python 3.9+.
