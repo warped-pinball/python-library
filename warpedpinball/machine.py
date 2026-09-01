@@ -459,6 +459,62 @@ class Machine:
                 changes.append((i, va, vb))
         return changes
 
+    # -- formats -----------------------------------------------------------------------
+
+    def formats(self) -> Any:
+        """Available game formats from ``/api/formats/available``."""
+        return self.call("/api/formats/available")
+
+    def active_format(self) -> Any:
+        """The format the machine is currently playing, from ``/api/formats/active``."""
+        return self.call("/api/formats/active")
+
+    def set_format(self, format_id: Any, options: Optional[Dict[str, Any]] = None) -> Any:
+        """Activate a game format via ``/api/formats/set`` (authenticated).
+
+        ``format_id`` is the numeric id (or the name) of one of the formats
+        :meth:`formats` returned. ``options`` are that format's configurable
+        settings, shaped like the ``Options`` block in the format's metadata.
+        """
+        body: Dict[str, Any] = {"format_id": format_id}
+        if options:
+            # The firmware reads this key capitalized, matching the casing it
+            # uses when it hands the options back out of /api/formats/available.
+            body["Options"] = options
+        return self._call_gated("/api/formats/set", body=body, authenticated=True)
+
+    # -- origin messages ---------------------------------------------------------------
+
+    def set_origin_target(self, secret: str, ip: Optional[str] = None) -> Any:
+        """Register where the board unicasts its Origin messages. Authenticated.
+
+        The board pushes live game events (game state, end of game, reset) as
+        UDP datagrams to port 6809. Until a target is registered it sends
+        nothing at all; once registered it sends *only* to this one address,
+        signing every datagram with ``secret`` (see :mod:`warpedpinball.origin`
+        for the frame layout and :func:`warpedpinball.origin.new_secret` for
+        generating one).
+
+        ``ip`` is the IPv4 address to send to; when omitted the board uses the
+        address this request arrived from, which is what you want whenever the
+        listener runs where this code runs -- including behind NAT, where the
+        board sees the translated address and the listener could not have
+        named it. Over USB there is no requester address, so pass ``ip``.
+
+        Registering again rotates the secret and resets the board's datagram
+        counter, so a listener that restarts simply re-registers.
+        """
+        body: Dict[str, Any] = {"enable": True, "secret": secret}
+        if ip is not None:
+            body["ip"] = ip
+        return self._call_gated("/api/origin/target", body=body, authenticated=True)
+
+    def clear_origin_target(self) -> Any:
+        """Stop the board sending Origin messages anywhere. Authenticated."""
+        return self._call_gated(
+            "/api/origin/target", body={"enable": False}, authenticated=True
+        )
+
     # -- polling -----------------------------------------------------------------------
 
     def watch_game(self, interval: float = 1.0) -> Iterator[GameEvent]:
