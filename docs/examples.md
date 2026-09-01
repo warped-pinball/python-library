@@ -7,6 +7,7 @@ small, self-contained file you can copy, run, and tweak.
 | --- | --- |
 | [`discover_boards.py`](../examples/discover_boards.py) | Finding every board on the LAN (with an IP fallback for networks that block broadcast), then connecting to each to print its IP, name, firmware, and game state |
 | [`elvira_hurryup.py`](../examples/elvira_hurryup.py) | Polling an SRAM byte in a loop and inferring game state to draw a live ELVIRA hurry-up display |
+| [`update_all_boards.py`](../examples/update_all_boards.py) | Discovering every board, checking each for a firmware update, then (after one confirmation) updating them all concurrently with a live per-board progress bar |
 
 ## Discover boards on the network
 
@@ -72,6 +73,46 @@ if not found:
 IP is enough to list the whole network. The script parses that payload
 defensively (the exact JSON shape can vary by firmware) and always includes the
 IP you supplied, so it works even if the peer table comes back empty.
+
+## Update every board on the network
+
+[`examples/update_all_boards.py`](../examples/update_all_boards.py) finds every
+board, checks which ones have a firmware update available, asks you once, and
+then updates them all at the same time — each board gets its own line with a
+progress bar that fills as its update streams.
+
+```bash
+python examples/update_all_boards.py
+```
+
+Checking is read-only and needs no password; each board's
+`check_for_updates()` (`/api/update/check`, which has a 10 s server-side
+cooldown) is called concurrently, and "the payload contains a `url`" is
+treated as the signal that an update exists. Applying is the authenticated
+part: the script uses `$VECTOR_PASSWORD` when set and otherwise prompts for
+the shared board password (via `getpass`) after you confirm. Then
+`apply_update()` streams `{"log": ..., "percent": ...}` records as the
+board downloads and flashes, and the script feeds each record's `percent`
+into a shared display:
+
+```python
+def on_record(record):
+    progress.update(name, percent=record.get("percent"), status=record.get("log"))
+
+m.apply_update(url=url, progress=on_record)
+```
+
+The progress display is ~25 lines: a dict of `name -> (percent, status)`
+behind a lock, redrawn in place by moving the cursor up N lines with
+`"\x1b[NA"` and erasing each line with `"\x1b[2K"` before rewriting it. Any
+thread that reports progress repaints the whole table, so all bars stay live
+even though the updates run in parallel. When stdout isn't a terminal the
+cursor moves are skipped and each repaint just prints fresh lines.
+
+A board that fails mid-update shows `FAILED: ...` on its own line instead of
+killing the others, and boards reboot themselves to finish applying — use
+`wait_until_reachable()` if you want to block until they're back. See
+[updates](machine.md) for `check_for_updates()` / `apply_update()` details.
 
 ## ELVIRA hurry-up display
 
