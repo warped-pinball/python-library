@@ -73,14 +73,14 @@ def pack(secret: str, body: Dict[str, Any]) -> bytes:
     return _mac(secret, encoded).encode("ascii") + encoded
 
 
-def unpack(secret: str, packet: bytes) -> Dict[str, Any]:
-    """Verify and decode a datagram; raises :class:`OriginAuthError` if it
-    was not signed with ``secret`` or is not a well-formed frame."""
+def _split(packet: bytes) -> tuple[bytes, bytes]:
+    """Signature and body halves of a frame, or raise on a malformed one."""
     if len(packet) <= MAC_LEN:
         raise OriginAuthError("Origin datagram too short to carry a signature")
-    received, body = packet[:MAC_LEN], packet[MAC_LEN:]
-    if not hmac.compare_digest(received.decode("ascii", "replace"), _mac(secret, body)):
-        raise OriginAuthError("Origin datagram signature does not match")
+    return packet[:MAC_LEN], packet[MAC_LEN:]
+
+
+def _decode(body: bytes) -> Dict[str, Any]:
     try:
         decoded = json.loads(body)
     except ValueError as exc:
@@ -88,3 +88,32 @@ def unpack(secret: str, packet: bytes) -> Dict[str, Any]:
     if not isinstance(decoded, dict):
         raise OriginAuthError("Origin datagram body is not a JSON object")
     return decoded
+
+
+def peek(packet: bytes) -> Dict[str, Any]:
+    """Decode a datagram's body **without verifying its signature**.
+
+    A listener holding secrets for many boards has a chicken-and-egg problem:
+    it must know which board is claiming to have sent a datagram before it can
+    choose the secret to check it against. This answers that question, and
+    nothing else -- everything it returns is unverified and, on an open
+    network, attacker-controlled.
+
+    Use it only to route::
+
+        machine_id = origin.peek(packet).get("machine_id")
+        body = origin.unpack(secrets[machine_id], packet)   # now it's trusted
+
+    Nothing from :func:`peek` should reach storage, a decision, or a log line
+    that implies it is true.
+    """
+    return _decode(_split(packet)[1])
+
+
+def unpack(secret: str, packet: bytes) -> Dict[str, Any]:
+    """Verify and decode a datagram; raises :class:`OriginAuthError` if it
+    was not signed with ``secret`` or is not a well-formed frame."""
+    received, body = _split(packet)
+    if not hmac.compare_digest(received.decode("ascii", "replace"), _mac(secret, body)):
+        raise OriginAuthError("Origin datagram signature does not match")
+    return _decode(body)

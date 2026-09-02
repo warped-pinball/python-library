@@ -151,6 +151,20 @@ Re-registering rotates the secret and resets the counter, so a listener that
 restarts just registers again. See
 [`warpedpinball.origin`](api-reference.md) for the frame layout.
 
+Listening to several boards at once means choosing a secret before you can
+check the signature. `peek()` reads the unverified body so you can route on
+the `machine_id` it claims:
+
+```python
+claimed = origin.peek(datagram).get("machine_id")
+event = origin.unpack(secrets[claimed], datagram)   # this is the trust step
+```
+
+Identify boards this way rather than by the datagram's source address: NAT
+between a board and the listener rewrites the address, and the signature is
+what actually establishes who sent it. Treat everything `peek()` returns as
+attacker-controlled until `unpack()` has returned.
+
 ## The raw escape hatch
 
 Every firmware route is reachable even without a wrapper:
