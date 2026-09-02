@@ -51,3 +51,32 @@ def test_non_json_and_non_object_bodies_are_rejected():
         packet = origin._mac(secret, body).encode() + body
         with pytest.raises(origin.OriginAuthError):
             origin.unpack(secret, packet)
+
+
+def test_peek_reads_the_body_without_a_secret():
+    body = {"machine_id": "a1b2c3d4", "type": "game_state", "n": 3}
+    packet = origin.pack(origin.new_secret(), body)
+
+    # Routing to a secret has to happen before the secret is known.
+    assert origin.peek(packet) == body
+
+
+def test_peek_does_not_authenticate():
+    # A forged datagram peeks fine -- that is the point of the warning in the
+    # docstring. unpack() is the step that establishes trust.
+    forged = origin.pack("not-the-real-secret", {"machine_id": "a1b2c3d4", "n": 1})
+
+    assert origin.peek(forged)["machine_id"] == "a1b2c3d4"
+    with pytest.raises(origin.OriginAuthError):
+        origin.unpack("the-real-secret", forged)
+
+
+@pytest.mark.parametrize("packet", [b"", b"short", b"0" * origin.MAC_LEN])
+def test_peek_rejects_malformed_frames(packet):
+    with pytest.raises(origin.OriginAuthError):
+        origin.peek(packet)
+
+
+def test_peek_rejects_a_body_that_is_not_a_json_object():
+    with pytest.raises(origin.OriginAuthError):
+        origin.peek(b"0" * origin.MAC_LEN + b"[1, 2]")
