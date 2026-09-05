@@ -47,7 +47,7 @@ from __future__ import annotations
 import socket
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, Iterator, List, Optional
 
 DISCOVERY_PORT = 37020
 BROADCAST_ADDR = "255.255.255.255"
@@ -336,3 +336,99 @@ def discover(
     for ip, seen_name in sightings.items():
         found.setdefault(ip, DiscoveredMachine(ip=ip, name=seen_name or ""))
     return list(found.values())
+
+
+@dataclass(frozen=True)
+class DiscoveryEvent:
+    """Something a board said about who is on the network.
+
+    ``kind`` is ``"roster"`` for a FULL frame -- the registry board's complete
+    list of live boards, and the closest thing the network has to ground truth
+    -- or ``"joined"`` for a HELLO, which one board sends when it comes up.
+
+    ``machines`` is the whole roster for ``"roster"``, and the single board
+    that announced itself for ``"joined"``.
+    """
+
+    kind: str
+    machines: List[DiscoveredMachine]
+
+
+def watch(
+    probe_interval: float = 30.0,
+    timeout: Optional[float] = None,
+) -> Iterator[DiscoveryEvent]:
+    """Watch the network and yield boards joining and full roster updates.
+
+    :func:`discover` asks once and returns. This keeps listening, which is what
+    a long-running service wants: a board broadcasts HELLO about ten seconds
+    after it boots, so a listener hears a machine come back on its own instead
+    of waiting out a polling interval. FULL frames arrive whenever the registry
+    board republishes its list -- every board on the network checks that list
+    against what it knows and corrects it, so it is the authoritative answer to
+    "what is on this network right now".
+
+    Probes go out every ``probe_interval`` seconds to keep quiet networks
+    talking (a lone board only announces itself every 15 s unprovoked). This
+    owns the discovery port for as long as it runs, so don't call
+    :func:`discover` concurrently in the same process -- that second socket
+    would be pushed to an ephemeral port and go deaf to the replies it wants.
+
+    Runs until ``timeout`` seconds have passed, or forever when it is ``None``.
+    Stops cleanly if the caller stops iterating.
+    """
+    sock = _open_socket()
+    local_ip = _local_ip()
+    local_ips = _local_ips()
+    probe_socks = _probe_sockets(local_ips)
+    targets = [BROADCAST_ADDR] + _directed_broadcasts(local_ips)
+    probes = [build_ping(), build_offline(local_ip)]
+
+    deadline = None if timeout is None else time.monotonic() + timeout
+    next_probe = 0.0
+    try:
+        while True:
+            now = time.monotonic()
+            if deadline is not None and now >= deadline:
+                return
+            if now >= next_probe:
+                for frame in probes:
+                    for out in [sock] + probe_socks:
+                        for addr in targets:
+                            try:
+                                out.sendto(frame, (addr, DISCOVERY_PORT))
+                            except OSError:
+                                pass  # interface without a broadcast route
+                next_probe = now + probe_interval
+
+            wait = next_probe - now
+            if deadline is not None:
+                wait = min(wait, deadline - now)
+            sock.settimeout(max(min(wait, 1.0), 0.01))
+            try:
+                data, addr = sock.recvfrom(4096)
+            except socket.timeout:
+                continue
+            except ConnectionResetError:
+                # Windows reports a bounced datagram on the next receive; not
+                # a socket failure, keep listening.
+                continue
+            except OSError:
+                return
+
+            if len(data) >= 2 and data[0] == MSG_FULL:
+                yield DiscoveryEvent("roster", parse_full(data))
+                continue
+
+            src = addr[0]
+            if src == local_ip or src in local_ips:
+                continue  # our own probe looped back
+            name = parse_hello(data)
+            if name is not None:
+                yield DiscoveryEvent(
+                    "joined", [DiscoveredMachine(ip=src, name=name)]
+                )
+    finally:
+        sock.close()
+        for out in probe_socks:
+            out.close()

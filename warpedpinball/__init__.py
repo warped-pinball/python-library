@@ -14,7 +14,7 @@ from __future__ import annotations
 import ipaddress
 from typing import List, Optional
 
-from .discovery import DiscoveredMachine, discover
+from .discovery import DiscoveredMachine, DiscoveryEvent, discover, watch
 from .exceptions import (
     AmbiguousMachineError,
     AuthenticationError,
@@ -33,12 +33,14 @@ from .machine import GameEvent, Machine
 from .origin import OriginAuthError
 from .transports.http import HttpTransport
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [
     "connect",
     "connect_usb",
     "discover",
+    "watch",
+    "DiscoveryEvent",
     "list_serial_ports",
     "Machine",
     "GameEvent",
