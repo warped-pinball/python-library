@@ -34,6 +34,28 @@ with warpedpinball.connect("elvira") as m:
 `AmbiguousMachineError` (listing the candidates) when a name doesn't resolve to
 exactly one board.
 
+`discover()` asks once and returns. A long-running service usually wants
+`watch()` instead, which keeps listening and yields as the network changes:
+
+```python
+from warpedpinball import discovery
+
+for event in discovery.watch():
+    if event.kind == "roster":
+        # A FULL frame: the registry board's complete list of live boards.
+        # Every board checks this against what it knows and corrects it, so
+        # it is the authoritative answer to what is on the network right now.
+        print("live boards:", [(m.ip, m.name) for m in event.machines])
+    elif event.kind == "joined":
+        # A HELLO: one board announcing itself, about ten seconds after boot.
+        print("came up:", event.machines[0].name)
+```
+
+That means a rebooted board is noticed when it announces itself, rather than
+whenever a polling interval happens to come round. `watch()` owns the
+discovery port while it runs, so don't call `discover()` concurrently in the
+same process.
+
 Boards service discovery every 1.5 s, so results usually arrive within about
 two seconds; the default 20 s cap (`connect(..., timeout=...)` /
 `discover(timeout=...)` to change it) only matters on a genuinely quiet

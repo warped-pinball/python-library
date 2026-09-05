@@ -466,3 +466,172 @@ def test_open_socket_falls_back_to_ephemeral_when_port_taken(monkeypatch):
     discovery._open_socket()
     # Fell back to an ephemeral port after the fixed port was taken.
     assert binds == [("0.0.0.0", discovery.DISCOVERY_PORT), ("0.0.0.0", 0)]
+
+
+# -- watch(): continuous discovery ------------------------------------------
+
+
+def _watch_events(monkeypatch, frames, **kwargs):
+    """Drain watch() over a fixed set of queued frames."""
+    monkeypatch.setattr(discovery, "_open_socket", lambda: FakeSocket(frames))
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [])
+    return list(discovery.watch(timeout=0.05, **kwargs))
+
+
+def test_watch_yields_the_roster_from_a_full_frame(monkeypatch):
+    frame = full_frame(peer("10.0.0.1", "Elvira"), peer("10.0.0.2", "Pinbot"))
+    events = _watch_events(monkeypatch, [frame])
+
+    assert len(events) == 1
+    assert events[0].kind == "roster"
+    assert events[0].machines == [
+        DiscoveredMachine(ip="10.0.0.1", name="Elvira"),
+        DiscoveredMachine(ip="10.0.0.2", name="Pinbot"),
+    ]
+
+
+def test_watch_yields_a_board_announcing_itself(monkeypatch):
+    # A board broadcasts HELLO about ten seconds after it boots.
+    events = _watch_events(monkeypatch, [(hello_frame("Elvira"), "10.0.0.5")])
+
+    assert len(events) == 1
+    assert events[0].kind == "joined"
+    assert events[0].machines == [DiscoveredMachine(ip="10.0.0.5", name="Elvira")]
+
+
+def test_watch_keeps_going_after_each_event(monkeypatch):
+    # Unlike discover(), a FULL frame does not end the watch.
+    frames = [
+        full_frame(peer("10.0.0.1", "Elvira")),
+        (hello_frame("Pinbot"), "10.0.0.2"),
+        full_frame(peer("10.0.0.1", "Elvira"), peer("10.0.0.2", "Pinbot")),
+    ]
+    kinds = [event.kind for event in _watch_events(monkeypatch, frames)]
+
+    assert kinds == ["roster", "joined", "roster"]
+
+
+def test_watch_ignores_its_own_probes_looping_back(monkeypatch):
+    monkeypatch.setattr(discovery, "_local_ip", lambda: "10.0.0.9")
+    monkeypatch.setattr(discovery, "_local_ips", lambda: ["10.0.0.9"])
+    frames = [(hello_frame("Echo"), "10.0.0.9"), (hello_frame("Real"), "10.0.0.5")]
+
+    events = _watch_events(monkeypatch, frames)
+
+    assert [m.name for e in events for m in e.machines] == ["Real"]
+
+
+def test_watch_ignores_pongs_and_garbage(monkeypatch):
+    frames = [bytes([4]), b"", b"\x99garbage", (hello_frame("Real"), "10.0.0.5")]
+
+    events = _watch_events(monkeypatch, frames)
+
+    assert [e.kind for e in events] == ["joined"]
+
+
+def test_watch_probes_the_network(monkeypatch):
+    monkeypatch.setattr(discovery, "_local_ip", lambda: "192.168.4.7")
+    monkeypatch.setattr(discovery, "_local_ips", lambda: ["192.168.4.7"])
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [])
+    sent = []
+
+    class RecordingSocket(FakeSocket):
+        def sendto(self, data, addr):
+            sent.append((data, addr))
+            super().sendto(data, addr)
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: RecordingSocket([]))
+    list(discovery.watch(timeout=0.05))
+
+    # A lone board only announces itself every 15 s unprovoked, so the watch
+    # prompts it the same way discover() does.
+    frames = {data for data, _addr in sent}
+    assert bytes([3]) in frames
+    assert bytes([5, 192, 168, 4, 7]) in frames
+
+
+def test_watch_closes_its_sockets_when_the_caller_stops(monkeypatch):
+    closed = []
+
+    class ClosingSocket(FakeSocket):
+        def close(self):
+            closed.append(True)
+
+    frame = full_frame(peer("10.0.0.1", "Elvira"))
+    monkeypatch.setattr(discovery, "_open_socket", lambda: ClosingSocket([frame] * 5))
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [])
+
+    watcher = discovery.watch()
+    next(watcher)  # one event, then walk away
+    watcher.close()
+
+    assert closed == [True]
+
+
+def test_watch_keeps_going_when_one_interface_refuses_a_probe(monkeypatch):
+    frame = full_frame(peer("10.0.0.1", "Elvira"))
+
+    class PickySocket(FakeSocket):
+        def sendto(self, data, addr):
+            # A host with an interface that has no broadcast route.
+            raise OSError("network is unreachable")
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: PickySocket([frame]))
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [])
+
+    events = list(discovery.watch(timeout=0.05))
+
+    assert [e.kind for e in events] == ["roster"]
+
+
+def test_watch_survives_windows_reporting_a_bounced_datagram(monkeypatch):
+    frame = full_frame(peer("10.0.0.1", "Elvira"))
+
+    class BouncingSocket(FakeSocket):
+        def recvfrom(self, bufsize):
+            # Windows reports an earlier datagram's ICMP port-unreachable on
+            # the next receive. It is not a socket failure.
+            if not getattr(self, "_bounced", False):
+                self._bounced = True
+                raise ConnectionResetError("WSAECONNRESET")
+            return super().recvfrom(bufsize)
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: BouncingSocket([frame]))
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [])
+
+    events = list(discovery.watch(timeout=0.5))
+
+    assert [e.kind for e in events] == ["roster"]
+
+
+def test_watch_ends_when_the_socket_dies(monkeypatch):
+    closed = []
+
+    class DeadSocket(FakeSocket):
+        def recvfrom(self, _bufsize):
+            raise OSError("socket closed")
+
+        def close(self):
+            closed.append("listen")
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: DeadSocket([]))
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [])
+
+    # Returns rather than raising, so a caller can start a fresh watch.
+    assert list(discovery.watch()) == []
+    assert closed == ["listen"]
+
+
+def test_watch_closes_the_per_interface_probe_sockets(monkeypatch):
+    closed = []
+
+    class ProbeSocket(FakeSocket):
+        def close(self):
+            closed.append("probe")
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: FakeSocket([]))
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [ProbeSocket([])])
+
+    list(discovery.watch(timeout=0.05))
+
+    assert closed == ["probe"]
