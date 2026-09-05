@@ -566,3 +566,72 @@ def test_watch_closes_its_sockets_when_the_caller_stops(monkeypatch):
     watcher.close()
 
     assert closed == [True]
+
+
+def test_watch_keeps_going_when_one_interface_refuses_a_probe(monkeypatch):
+    frame = full_frame(peer("10.0.0.1", "Elvira"))
+
+    class PickySocket(FakeSocket):
+        def sendto(self, data, addr):
+            # A host with an interface that has no broadcast route.
+            raise OSError("network is unreachable")
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: PickySocket([frame]))
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [])
+
+    events = list(discovery.watch(timeout=0.05))
+
+    assert [e.kind for e in events] == ["roster"]
+
+
+def test_watch_survives_windows_reporting_a_bounced_datagram(monkeypatch):
+    frame = full_frame(peer("10.0.0.1", "Elvira"))
+
+    class BouncingSocket(FakeSocket):
+        def recvfrom(self, bufsize):
+            # Windows reports an earlier datagram's ICMP port-unreachable on
+            # the next receive. It is not a socket failure.
+            if not getattr(self, "_bounced", False):
+                self._bounced = True
+                raise ConnectionResetError("WSAECONNRESET")
+            return super().recvfrom(bufsize)
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: BouncingSocket([frame]))
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [])
+
+    events = list(discovery.watch(timeout=0.5))
+
+    assert [e.kind for e in events] == ["roster"]
+
+
+def test_watch_ends_when_the_socket_dies(monkeypatch):
+    closed = []
+
+    class DeadSocket(FakeSocket):
+        def recvfrom(self, _bufsize):
+            raise OSError("socket closed")
+
+        def close(self):
+            closed.append("listen")
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: DeadSocket([]))
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [])
+
+    # Returns rather than raising, so a caller can start a fresh watch.
+    assert list(discovery.watch()) == []
+    assert closed == ["listen"]
+
+
+def test_watch_closes_the_per_interface_probe_sockets(monkeypatch):
+    closed = []
+
+    class ProbeSocket(FakeSocket):
+        def close(self):
+            closed.append("probe")
+
+    monkeypatch.setattr(discovery, "_open_socket", lambda: FakeSocket([]))
+    monkeypatch.setattr(discovery, "_probe_sockets", lambda ips: [ProbeSocket([])])
+
+    list(discovery.watch(timeout=0.05))
+
+    assert closed == ["probe"]
