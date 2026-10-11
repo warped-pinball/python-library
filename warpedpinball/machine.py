@@ -597,14 +597,14 @@ def _iter_records(chunks: Iterator[bytes]) -> Iterator[dict]:
                 except ValueError:
                     break  # an object still arriving
                 buffer = buffer[end:]
-                yield value if isinstance(value, dict) else {"log": str(value)}
+                yield value  # a dict: the text started with "{"
                 continue
             # Plain text: one line of it, once the line is complete.
             if "\n" not in buffer:
                 break
+            # Never blank: leading whitespace was stripped above.
             line, buffer = buffer.split("\n", 1)
-            if line.strip():
-                yield {"log": line.strip()}
+            yield {"log": line.strip()}
     tail = (buffer + pending.decode("utf-8", errors="replace")).strip()
     if tail:
         try:
