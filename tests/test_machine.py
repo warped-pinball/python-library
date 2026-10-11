@@ -471,11 +471,95 @@ def test_apply_update_non_dict_check_result_raises():
         machine.apply_update()
 
 
-def test_iter_lines_skips_blank_lines():
-    from warpedpinball.machine import _iter_lines
+def test_iter_records_skips_blank_lines():
+    from warpedpinball.machine import _iter_records
 
-    lines = list(_iter_lines(iter([b"a\n\n\nb\n"])))
-    assert lines == ["a", "b"]  # blank lines between newlines dropped
+    records = list(_iter_records(iter([b"a\n\n\nb\n"])))
+    assert records == [{"log": "a"}, {"log": "b"}]  # blank lines dropped
+
+
+def test_iter_records_splits_back_to_back_objects_as_they_arrive():
+    """The firmware writes records with nothing between them."""
+    from warpedpinball.machine import _iter_records
+
+    seen = []
+
+    def chunks():
+        yield b'{"log": "Starting update", "percent": 0}{"perc'
+        # The first record is out before the rest of the stream exists.
+        seen.append("second chunk")
+        yield b'ent": 2.5}{"log": "Writing /a.py", "percent": 41}'
+
+    records = []
+    for record in _iter_records(chunks()):
+        records.append((record, list(seen)))
+    assert records == [
+        ({"log": "Starting update", "percent": 0}, []),
+        ({"percent": 2.5}, ["second chunk"]),
+        ({"log": "Writing /a.py", "percent": 41}, ["second chunk"]),
+    ]
+
+
+def test_iter_records_handles_a_character_split_across_chunks():
+    from warpedpinball.machine import _iter_records
+
+    raw = json.dumps({"log": "caf\u00e9"}, ensure_ascii=False).encode()
+    split = raw.index("\u00e9".encode()) + 1
+    records = list(_iter_records(iter([raw[:split], raw[split:]])))
+    assert records == [{"log": "caf\u00e9"}]
+
+
+def test_iter_records_keeps_stray_text_and_non_object_json():
+    from warpedpinball.machine import _iter_records
+
+    assert list(_iter_records(iter([b"[1, 2]"]))) == [{"log": "[1, 2]"}]
+    assert list(_iter_records(iter([b'{"percent": 1}trailing']))) == [
+        {"percent": 1},
+        {"log": "trailing"},
+    ]
+    assert list(_iter_records(iter([b"\xff\xfe\xfd\xfc\xfb"]))) == [
+        {"log": "\ufffd" * 5}
+    ]
+
+
+def _dropping_stream(chunks):
+    from warpedpinball.exceptions import DeviceUnreachableError
+
+    def _gen():
+        yield from chunks
+        raise DeviceUnreachableError("192.168.1.42")
+
+    return _gen()
+
+
+def test_apply_update_treats_the_reboot_after_completion_as_success():
+    """A finished board reboots mid-connection; that is the update working."""
+    machine, transport = make_machine(
+        responses={"/api/update/check": {"url": "http://u/fw.bin"}},
+    )
+    transport.stream = lambda *a, **k: _dropping_stream(
+        [
+            b'{"log": "Writing files to board", "percent": 40}',
+            b'{"log": "Update complete, Device will now reboot", "percent": 99}',
+        ]
+    )
+    records = machine.apply_update()
+    assert records[-1]["percent"] == 99
+
+
+def test_apply_update_losing_the_board_midway_raises():
+    from warpedpinball.exceptions import DeviceUnreachableError
+
+    machine, transport = make_machine(
+        responses={"/api/update/check": {"url": "http://u/fw.bin"}},
+    )
+    transport.stream = lambda *a, **k: _dropping_stream(
+        [b'{"log": "Writing files to board", "percent": 40}']
+    )
+    seen = []
+    with pytest.raises(DeviceUnreachableError):
+        machine.apply_update(progress=seen.append)
+    assert seen == [{"log": "Writing files to board", "percent": 40}]
 
 
 def test_diff_status_non_dict_inputs_yield_status_changed():

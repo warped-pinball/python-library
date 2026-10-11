@@ -7,6 +7,7 @@ from typing import Any, Iterator, Optional
 from urllib.parse import urlsplit
 
 import requests
+import urllib3
 
 from .. import auth
 from ..exceptions import (
@@ -20,6 +21,30 @@ from ..exceptions import (
 from . import Transport, parse_body, raise_for_status, serialize_body
 
 DEFAULT_TIMEOUT = 10.0
+
+#: Most a streamed read hands back at once.
+STREAM_CHUNK = 4096
+
+
+def _available_chunks(resp: requests.Response) -> Iterator[bytes]:
+    """Yield a streamed body as it arrives, not once a fixed-size buffer fills.
+
+    ``iter_content(4096)`` blocks until 4096 bytes are in hand. A board
+    streaming update progress sends a few dozen bytes at a time and closes
+    the connection without a length, so every record would sit in that buffer
+    until the end. ``read1`` returns whatever has arrived; urllib3 older than
+    2.3 has no ``read1``, and byte-at-a-time reads are the responsive
+    fallback (these streams are small).
+    """
+    read1 = getattr(getattr(resp, "raw", None), "read1", None)
+    if callable(read1):
+        while True:
+            chunk = read1(STREAM_CHUNK)
+            if not chunk:
+                return
+            yield chunk
+    else:
+        yield from resp.iter_content(chunk_size=1)
 
 
 def _is_lan_address(host: str) -> bool:
@@ -192,11 +217,19 @@ class HttpTransport(Transport):
 
         def _iter() -> Iterator[bytes]:
             try:
-                for chunk in resp.iter_content(chunk_size=4096):
+                for chunk in _available_chunks(resp):
                     if chunk:
                         yield chunk
             except requests.RequestException as exc:
                 raise self._wrap_request_exc(exc, path) from None
+            except (urllib3.exceptions.ReadTimeoutError, TimeoutError) as exc:
+                raise self._wrap_request_exc(
+                    requests.exceptions.Timeout(exc), path
+                ) from None
+            except (urllib3.exceptions.HTTPError, OSError) as exc:
+                raise self._wrap_request_exc(
+                    requests.exceptions.ConnectionError(exc), path
+                ) from None
             finally:
                 resp.close()
 
