@@ -399,7 +399,11 @@ def test_stream_delivers_progress_before_the_board_closes_the_connection():
 
     def serve():
         conn, _ = server.accept()
-        conn.recv(65536)
+        # Read the whole request, body included: closing with any of it
+        # unread makes the kernel send a reset instead of a clean close.
+        request = b""
+        while not request.endswith(b'{"url": "u"}'):
+            request += conn.recv(65536)
         conn.sendall(b"HTTP/1.1 200 200\r\nContent-Type: text/html\r\n\r\n")
         conn.sendall(b'{"percent": 1}')
         release.wait(5)
