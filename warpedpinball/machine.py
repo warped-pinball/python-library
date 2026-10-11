@@ -284,8 +284,13 @@ class Machine:
         """Apply a firmware update, streaming progress.
 
         When ``url`` is omitted it is taken from :meth:`check_for_updates`.
-        ``progress`` receives each ``{"log": ..., "percent": ...}`` line as it
-        streams. Returns the list of all progress records.
+        ``progress`` receives each ``{"log": ..., "percent": ...}`` record as
+        it streams. Returns the list of all progress records.
+
+        A board that finishes an update reboots without closing the
+        connection, so a connection lost after the board has said the update
+        is complete is the update succeeding, and returns normally. Lost any
+        earlier, it raises.
         """
         if url is None:
             info = self.check_for_updates()
@@ -300,14 +305,14 @@ class Machine:
             "/api/update/apply", body={"url": url}, authenticated=True
         )
         records: List[dict] = []
-        for line in _iter_lines(stream):
-            try:
-                record = json.loads(line)
-            except ValueError:
-                record = {"log": line}
-            records.append(record)
-            if progress is not None:
-                progress(record)
+        try:
+            for record in _iter_records(stream):
+                records.append(record)
+                if progress is not None:
+                    progress(record)
+        except TransportError:
+            if not _update_finished(records):
+                raise
         return records
 
     # -- clock --------------------------------------------------------------------
@@ -547,19 +552,66 @@ class Machine:
             ) from None
 
 
-def _iter_lines(chunks: Iterator[bytes]) -> Iterator[str]:
-    """Split a byte-chunk stream into decoded, non-empty lines."""
-    buffer = b""
+#: The board's last words before it reboots into new firmware.
+_UPDATE_COMPLETE = "update complete"
+
+
+def _update_finished(records: List[dict]) -> bool:
+    """Whether the board has reported its update as written and rebooting."""
+    for record in records:
+        if _UPDATE_COMPLETE in str(record.get("log") or "").lower():
+            return True
+    return False
+
+
+def _iter_records(chunks: Iterator[bytes]) -> Iterator[dict]:
+    """Decode a stream of JSON objects, however they are separated.
+
+    The firmware writes each record back to back with nothing between them
+    (``{"percent": 2}{"percent": 3}``), so splitting on newlines would hold
+    every record until the stream ends. Newline-separated records still parse,
+    and text that is not JSON comes through as ``{"log": text}``.
+    """
+    decoder = json.JSONDecoder()
+    buffer = ""
+    pending = b""
     for chunk in chunks:
-        buffer += chunk
-        while b"\n" in buffer:
-            line, buffer = buffer.split(b"\n", 1)
-            text = line.decode("utf-8", errors="replace").strip()
-            if text:
-                yield text
-    tail = buffer.decode("utf-8", errors="replace").strip()
+        pending += chunk
+        try:
+            buffer += pending.decode("utf-8")
+            pending = b""
+        except UnicodeDecodeError as exc:
+            # A multi-byte character split across chunks: keep its start.
+            buffer += pending[: exc.start].decode("utf-8")
+            pending = pending[exc.start :]
+            if len(pending) > 3:  # not a split character, just bad bytes
+                buffer += pending.decode("utf-8", errors="replace")
+                pending = b""
+        while True:
+            buffer = buffer.lstrip()
+            if not buffer:
+                break
+            if buffer[0] == "{":
+                try:
+                    value, end = decoder.raw_decode(buffer)
+                except ValueError:
+                    break  # an object still arriving
+                buffer = buffer[end:]
+                yield value  # a dict: the text started with "{"
+                continue
+            # Plain text: one line of it, once the line is complete.
+            if "\n" not in buffer:
+                break
+            # Never blank: leading whitespace was stripped above.
+            line, buffer = buffer.split("\n", 1)
+            yield {"log": line.strip()}
+    tail = (buffer + pending.decode("utf-8", errors="replace")).strip()
     if tail:
-        yield tail
+        try:
+            value = json.loads(tail)
+        except ValueError:
+            value = None
+        yield value if isinstance(value, dict) else {"log": tail}
 
 
 def _find_key(d: Any, *fragments: str) -> Optional[str]:

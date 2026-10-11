@@ -122,6 +122,8 @@ m.update_player(id=3, initials="MAX", full_name="Max M.")   # authenticated
 
 # Firmware updates, with streamed progress
 info = m.check_for_updates()          # note: 10 s server-side cooldown
+# progress fires as each record arrives; the board rebooting at the end is
+# success, losing it earlier raises
 m.apply_update(progress=lambda rec: print(rec.get("percent"), rec.get("log")))
 m.wait_until_reachable()              # poll /api/version until the board is back
 

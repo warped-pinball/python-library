@@ -4,6 +4,7 @@ import json
 
 import pytest
 import requests
+import urllib3
 from conftest import FakeResponse, FakeSession
 
 from warpedpinball import auth
@@ -335,3 +336,85 @@ def test_hostnames_and_public_ips_keep_proxy_behavior():
 def test_caller_supplied_session_is_left_alone():
     session = requests.Session()
     assert HttpTransport("192.168.4.7", session=session)._session.trust_env is True
+
+
+class _RawResponse(FakeResponse):
+    """A response whose body is read the way urllib3 2.3+ allows."""
+
+    def __init__(self, reads):
+        super().__init__(200)
+        self._reads = list(reads)
+        self.raw = self
+
+    def read1(self, amt):
+        item = self._reads.pop(0) if self._reads else b""
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    def iter_content(self, chunk_size=4096):  # pragma: no cover - must not run
+        raise AssertionError("read1 should be used when available")
+
+
+def test_stream_returns_what_has_arrived_rather_than_filling_a_buffer():
+    session = FakeSession()
+    session.responses = [_RawResponse([b'{"percent": 1}', b'{"percent": 2}'])]
+    chunks = list(make_transport(session).stream("/api/update/apply"))
+    assert chunks == [b'{"percent": 1}', b'{"percent": 2}']
+
+
+@pytest.mark.parametrize(
+    "error, expected",
+    [
+        (
+            urllib3.exceptions.ProtocolError("Connection broken: reset by peer"),
+            DeviceUnreachableError,
+        ),
+        (ConnectionResetError(104, "reset"), DeviceUnreachableError),
+        (
+            urllib3.exceptions.ReadTimeoutError(None, "/", "Read timed out."),
+            DeviceTimeoutError,
+        ),
+    ],
+)
+def test_stream_raw_read_errors_are_typed(error, expected):
+    session = FakeSession()
+    session.responses = [_RawResponse([b"partial", error])]
+    stream = make_transport(session).stream("/api/update/apply")
+    assert next(stream) == b"partial"
+    with pytest.raises(expected):
+        next(stream)
+
+
+def test_stream_delivers_progress_before_the_board_closes_the_connection():
+    """Against a real socket: no length, records trickle in, then a reset."""
+    import socket
+    import threading
+
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+    release = threading.Event()
+
+    def serve():
+        conn, _ = server.accept()
+        # Read the whole request, body included: closing with any of it
+        # unread makes the kernel send a reset instead of a clean close.
+        request = b""
+        while not request.endswith(b"}"):
+            request += conn.recv(65536)
+        conn.sendall(b"HTTP/1.1 200 200\r\nContent-Type: text/html\r\n\r\n")
+        conn.sendall(b'{"percent": 1}')
+        release.wait(5)
+        conn.sendall(b'{"percent": 2}')
+        conn.close()
+        server.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    transport = HttpTransport(f"127.0.0.1:{port}", timeout=5)
+    stream = transport.stream("/api/update/apply", body={"url": "u"})
+    # The first record arrives while the board is still holding the second.
+    assert next(stream) == b'{"percent": 1}'
+    release.set()
+    assert b"".join(stream) == b'{"percent": 2}'
